@@ -1,4 +1,5 @@
 import React from 'react';
+import { SoundSystem } from '../audio';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger';
@@ -10,6 +11,8 @@ export const Button: React.FC<ButtonProps> = ({
   variant = 'primary', 
   size = 'md', 
   className = '', 
+  onClick,
+  onMouseEnter,
   ...props 
 }) => {
   const baseStyles = "relative font-bold uppercase tracking-wider transition-all duration-200 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed border-2 retro-font";
@@ -26,9 +29,21 @@ export const Button: React.FC<ButtonProps> = ({
     lg: "px-10 py-4 text-lg",
   };
 
+  const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+    SoundSystem.playUiHover();
+    onMouseEnter?.(e);
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    SoundSystem.playUiClick();
+    onClick?.(e);
+  };
+
   return (
     <button 
       className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
+      onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
       {...props}
     >
       {children}

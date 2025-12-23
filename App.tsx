@@ -3,6 +3,7 @@ import { GameStatePhase, PlayerStats, Upgrade, GameContext } from './types';
 import { INITIAL_PLAYER_STATS, ENEMIES, UPGRADES, CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
 import { Button } from './components/Button';
 import GameCanvas from './components/GameCanvas';
+import { SoundSystem } from './audio';
 
 // Helper to shuffle upgrades
 const getRandomUpgrades = (count: number): Upgrade[] => {
@@ -17,10 +18,8 @@ const App: React.FC = () => {
   const [currentEnemyHp, setCurrentEnemyHp] = useState(3);
   const [availableUpgrades, setAvailableUpgrades] = useState<Upgrade[]>([]);
   
-  // We use a ref for game active state to prevent re-renders in the loop if not needed
-  // but for React state management flow:
-  
   const startGame = () => {
+    SoundSystem.init(); // Initialize audio context on first user interaction
     setPlayerStats(INITIAL_PLAYER_STATS);
     setLevel(1);
     setCurrentEnemyHp(ENEMIES[0].hp);
@@ -30,34 +29,37 @@ const App: React.FC = () => {
   const handleLevelComplete = () => {
     if (level >= ENEMIES.length) {
       setPhase('VICTORY');
+      SoundSystem.playLevelUp(); // Victory fanfare
     } else {
       setAvailableUpgrades(getRandomUpgrades(3));
       setPhase('LEVEL_UP');
+      SoundSystem.playLevelUp();
     }
   };
 
   const handleSelectUpgrade = (upgrade: Upgrade) => {
+    SoundSystem.playUpgradeSelect();
     setPlayerStats(prev => upgrade.apply(prev));
     setLevel(l => l + 1);
     // Reset enemy HP for next level
     if (level < ENEMIES.length) {
-      setCurrentEnemyHp(ENEMIES[level].hp); // Note: level is 1-based, array 0-based, so level index matches next enemy
+      setCurrentEnemyHp(ENEMIES[level].hp); 
       setPhase('PLAYING');
     } else {
-       setPhase('VICTORY'); // Should be caught by handleLevelComplete but just in case
+       setPhase('VICTORY');
     }
   };
 
   const handleGameOver = () => {
     setPhase('GAME_OVER');
+    SoundSystem.playGameOver();
   };
 
   const handlePlayerDamage = () => {
     setPlayerStats(prev => {
         const newHp = prev.hp - 1;
         if (newHp <= 0) {
-            // Defer game over to effect or next render cycle to avoid update during render issues
-            setTimeout(() => setPhase('GAME_OVER'), 0);
+            setTimeout(() => handleGameOver(), 0);
         }
         return { ...prev, hp: newHp };
     });
@@ -116,6 +118,7 @@ const App: React.FC = () => {
               {availableUpgrades.map((upgrade) => (
                 <button
                   key={upgrade.id}
+                  onMouseEnter={() => SoundSystem.playUiHover()}
                   onClick={() => handleSelectUpgrade(upgrade)}
                   className={`
                     group relative p-6 border-2 flex flex-col items-start text-left h-64 justify-between transition-all duration-300 hover:-translate-y-2
@@ -170,7 +173,7 @@ const App: React.FC = () => {
       
       {/* Mobile Controls Hint */}
       <div className="fixed bottom-4 left-0 right-0 text-center text-zinc-500 text-xs md:hidden pointer-events-none">
-        TAP LEFT/RIGHT TO MOVE IF MOUSE UNAVAILABLE (Implementation Pending)
+        TAP LEFT/RIGHT TO MOVE IF MOUSE UNAVAILABLE
       </div>
     </div>
   );

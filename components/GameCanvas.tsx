@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { GameContext, Paddle, Ball, Particle } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PADDLE_WIDTH, BALL_SIZE, INITIAL_BALL_SPEED } from '../constants';
 import { updateGame, updateParticles, createParticle } from '../engine';
+import { SoundSystem } from '../audio';
 
 interface GameCanvasProps {
   context: GameContext;
@@ -57,9 +58,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
     enemyRef.current.height = context.enemy.paddleHeight;
     enemyRef.current.speed = context.enemy.paddleSpeed;
     enemyRef.current.color = context.enemy.color;
-    
-    // Reset positions on new level? Optional, but safer
-    // playerRef.current.pos.y = CANVAS_HEIGHT / 2 - context.player.paddleHeight/2;
   }, [context]);
 
 
@@ -112,20 +110,26 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
       // Merge particles
       particlesRef.current = [...updateParticles(particlesRef.current), ...updateResult.particles];
 
-      // Handle Events
+      // Handle Events & Sound
       if (updateResult.event === 'score_player') {
         screenShakeRef.current = 10;
+        SoundSystem.playScorePlayer();
         onPlayerScore();
-        // Reset mouse pos to prevent jumping if mouse left canvas
         mousePos.current = null; 
       } else if (updateResult.event === 'score_enemy') {
         screenShakeRef.current = 10;
+        SoundSystem.playScoreEnemy();
         onEnemyScore();
         mousePos.current = null;
-      } else if (updateResult.event === 'hit_player' || updateResult.event === 'hit_enemy') {
+      } else if (updateResult.event === 'hit_player') {
         screenShakeRef.current = 3;
+        SoundSystem.playPlayerHit();
+      } else if (updateResult.event === 'hit_enemy') {
+        screenShakeRef.current = 3;
+        SoundSystem.playEnemyHit();
       } else if (updateResult.event === 'wall') {
         screenShakeRef.current = 1;
+        SoundSystem.playWallHit();
       }
 
       // Decrease Screen Shake
@@ -201,7 +205,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
       canvas.removeEventListener('touchmove', handleTouchMove);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [context, onPlayerScore, onEnemyScore]); // Dependencies for recreating loop if context functions change
+  }, [context, onPlayerScore, onEnemyScore]);
 
   return (
     <div className="relative w-full h-full cursor-none">
