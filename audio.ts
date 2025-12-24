@@ -72,20 +72,29 @@ const playNoise = (duration: number, vol: number = 0.1) => {
 export const SoundSystem = {
   init: initAudio,
 
-  updateDrone: (ballSpeed: number) => {
+  updateDrone: (ballSpeed: number, isFPS: boolean = false) => {
     if (droneOsc && audioCtx) {
-      const targetFreq = 40 + (ballSpeed * 3);
+      const targetFreq = isFPS ? 30 : (40 + (ballSpeed * 3));
       droneOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.5);
     }
   },
 
   playShoot: (level: number) => {
     if (level === 3) {
-      playTone(100, 'sawtooth', 0.4, 0.3);
-      playTone(200, 'sine', 0.2, 0.2);
+      playTone(60, 'sawtooth', 0.5, 0.4);
+      playTone(120, 'sine', 0.3, 0.3);
     } else {
       playTone(800 + Math.random() * 200, 'square', 0.1, 0.1);
     }
+  },
+
+  playJump: () => {
+    playTone(200, 'triangle', 0.2, 0.1);
+    playTone(400, 'sine', 0.1, 0.05);
+  },
+
+  playLand: () => {
+    playNoise(0.05, 0.05);
   },
 
   playProjectileHit: () => {
@@ -94,17 +103,13 @@ export const SoundSystem = {
   },
 
   playPlayerHit: () => {
-    playTone(600 + Math.random() * 200, 'sine', 0.15, 0.2); 
-    playTone(1200, 'triangle', 0.05, 0.05);
+    playTone(60, 'sawtooth', 0.2, 0.3); 
+    playNoise(0.1, 0.2);
   },
 
   playEnemyHit: () => {
-    playTone(180 + Math.random() * 40, 'square', 0.2, 0.12); 
-  },
-
-  playWallHit: () => {
-    playNoise(0.08, 0.12);
-    playTone(80, 'triangle', 0.1, 0.2);
+    playTone(120, 'sawtooth', 0.1, 0.2);
+    playNoise(0.05, 0.1);
   },
 
   playScorePlayer: () => {
@@ -114,8 +119,13 @@ export const SoundSystem = {
   },
 
   playScoreEnemy: () => {
-    playTone(140, 'sawtooth', 0.5, 0.2);
-    playTone(90, 'sawtooth', 0.6, 0.2);
+    const ctx = initAudio();
+    if (!ctx) return;
+    [392, 329, 261, 196].forEach((f) => playTone(f, 'sine', 0.4, 0.1));
+  },
+
+  playWallHit: () => {
+    playTone(150, 'sine', 0.05, 0.05);
   },
 
   playLevelUp: () => {
@@ -129,5 +139,9 @@ export const SoundSystem = {
   playUpgradeSelect: () => {
     playTone(800, 'square', 0.1, 0.1);
     setTimeout(() => playTone(1400, 'square', 0.1, 0.1), 80);
+  },
+  
+  playFootstep: () => {
+    playNoise(0.02, 0.02);
   }
 };

@@ -1,4 +1,4 @@
-export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY';
+export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY' | 'FPS_HUNT' | 'SIDE_SCROLLER';
 
 export interface Vector {
   x: number;
@@ -88,4 +88,19 @@ export interface GameContext {
   level: number;
   player: PlayerStats;
   enemy: EnemyStats;
+}
+
+// FPS & Side-Scroller Specific
+export interface FPSEnemy {
+  x: number;
+  y: number;
+  hp: number;
+  color: string;
+  dead: boolean;
+}
+
+export interface PlatformEnemy extends Entity {
+  velX: number;
+  hp: number;
+  dead: boolean;
 }
