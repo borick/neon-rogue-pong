@@ -22,6 +22,17 @@ export interface Particle {
   size: number;
 }
 
+export interface Projectile {
+  id: number;
+  pos: Vector;
+  vel: Vector;
+  width: number;
+  height: number;
+  color: string;
+  active: boolean;
+  damage: number;
+}
+
 export interface Ball extends Entity {
   vel: Vector;
   speed: number;
@@ -31,6 +42,7 @@ export interface Ball extends Entity {
 export interface Paddle extends Entity {
   speed: number;
   targetY?: number; // For AI
+  glitchTimer?: number; // Frames frozen
 }
 
 export interface PlayerStats {
@@ -39,7 +51,18 @@ export interface PlayerStats {
   score: number;
   paddleHeight: number;
   paddleSpeed: number;
-  ballPower: number; // Increases ball speed on hit
+  ballPower: number; 
+  ballSpeedMult: number; 
+  enemySpeedMult: number; 
+  vampirism: number;
+  shield: number; 
+  maxShield: number; 
+  magnetism: number; 
+  timeDilation: boolean; 
+  glitchChance: number; 
+  weaponLevel: number; // 0: None, 1: Basic, 2: Twin, 3: Omega
+  shootCooldown: number;
+  currentCooldown: number;
 }
 
 export interface EnemyStats {
@@ -48,8 +71,8 @@ export interface EnemyStats {
   maxHp: number;
   paddleHeight: number;
   paddleSpeed: number;
-  reactionDelay: number; // Frames to wait before updating target
-  errorMargin: number; // Random offset in tracking
+  reactionDelay: number; 
+  errorMargin: number; 
   color: string;
 }
 

@@ -5,22 +5,68 @@ import { Button } from './components/Button';
 import GameCanvas from './components/GameCanvas';
 import { SoundSystem } from './audio';
 
-// Helper to shuffle upgrades
-const getRandomUpgrades = (count: number): Upgrade[] => {
-  const shuffled = [...UPGRADES].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, count);
+/**
+ * Enhanced upgrade selection logic:
+ * 1. Filters out weapons already surpassed.
+ * 2. Filters out fire rate upgrades if no weapons are held.
+ * 3. Uses weighted probabilities for rarities.
+ */
+const getContextualUpgrades = (stats: PlayerStats, count: number): Upgrade[] => {
+  // 1. Filter based on player state
+  const validUpgrades = UPGRADES.filter(u => {
+    // Don't offer reloader if no gun
+    if (u.id === 'fire_rate' && stats.weaponLevel === 0) return false;
+    // Don't offer weaker or redundant weapons
+    if (u.id === 'weapon_1' && stats.weaponLevel >= 1) return false;
+    if (u.id === 'weapon_2' && stats.weaponLevel >= 2) return false;
+    if (u.id === 'weapon_3' && stats.weaponLevel >= 3) return false;
+    // Max stats limits could be added here if needed
+    return true;
+  });
+
+  const results: Upgrade[] = [];
+  const pool = [...validUpgrades];
+
+  while (results.length < count && pool.length > 0) {
+    const roll = Math.random();
+    let targetRarity: Upgrade['rarity'] = 'common';
+    
+    // Rarity Weights: Common 70%, Rare 25%, Legendary 5%
+    if (roll < 0.05) targetRarity = 'legendary';
+    else if (roll < 0.30) targetRarity = 'rare';
+    else targetRarity = 'common';
+
+    // Find items matching this rarity
+    let candidates = pool.filter(u => u.rarity === targetRarity);
+    
+    // Fallback if no items of that rarity are in the pool
+    if (candidates.length === 0) {
+      candidates = pool;
+    }
+
+    const randomIndex = Math.floor(Math.random() * candidates.length);
+    const selected = candidates[randomIndex];
+    
+    results.push(selected);
+    
+    // Remove from pool to prevent duplicates in a single screen
+    const poolIndex = pool.indexOf(selected);
+    if (poolIndex > -1) pool.splice(poolIndex, 1);
+  }
+
+  return results;
 };
 
 const App: React.FC = () => {
   const [phase, setPhase] = useState<GameStatePhase>('MENU');
   const [level, setLevel] = useState(1);
   const [playerStats, setPlayerStats] = useState<PlayerStats>(INITIAL_PLAYER_STATS);
-  const [currentEnemyHp, setCurrentEnemyHp] = useState(3);
+  const [currentEnemyHp, setCurrentEnemyHp] = useState(1);
   const [availableUpgrades, setAvailableUpgrades] = useState<Upgrade[]>([]);
   
   const startGame = () => {
-    SoundSystem.init(); // Initialize audio context on first user interaction
-    setPlayerStats(INITIAL_PLAYER_STATS);
+    SoundSystem.init(); 
+    setPlayerStats({ ...INITIAL_PLAYER_STATS, currentCooldown: 0 });
     setLevel(1);
     setCurrentEnemyHp(ENEMIES[0].hp);
     setPhase('PLAYING');
@@ -29,9 +75,10 @@ const App: React.FC = () => {
   const handleLevelComplete = () => {
     if (level >= ENEMIES.length) {
       setPhase('VICTORY');
-      SoundSystem.playLevelUp(); // Victory fanfare
+      SoundSystem.playLevelUp();
     } else {
-      setAvailableUpgrades(getRandomUpgrades(3));
+      // Pass current player stats to filter the pool
+      setAvailableUpgrades(getContextualUpgrades(playerStats, 3));
       setPhase('LEVEL_UP');
       SoundSystem.playLevelUp();
     }
@@ -39,11 +86,16 @@ const App: React.FC = () => {
 
   const handleSelectUpgrade = (upgrade: Upgrade) => {
     SoundSystem.playUpgradeSelect();
-    setPlayerStats(prev => upgrade.apply(prev));
-    setLevel(l => l + 1);
-    // Reset enemy HP for next level
-    if (level < ENEMIES.length) {
-      setCurrentEnemyHp(ENEMIES[level].hp); 
+    const nextStats = upgrade.apply(playerStats);
+    // Refresh shields on every level up
+    nextStats.shield = nextStats.maxShield;
+    setPlayerStats(nextStats);
+    
+    const nextLevel = level + 1;
+    setLevel(nextLevel);
+    
+    if (nextLevel <= ENEMIES.length) {
+      setCurrentEnemyHp(ENEMIES[nextLevel - 1].hp); 
       setPhase('PLAYING');
     } else {
        setPhase('VICTORY');
@@ -57,89 +109,92 @@ const App: React.FC = () => {
 
   const handlePlayerDamage = () => {
     setPlayerStats(prev => {
+        if (prev.shield > 0) return { ...prev, shield: prev.shield - 1 };
         const newHp = prev.hp - 1;
-        if (newHp <= 0) {
-            setTimeout(() => handleGameOver(), 0);
-        }
+        if (newHp <= 0) setTimeout(() => handleGameOver(), 0);
         return { ...prev, hp: newHp };
     });
   };
 
-  const handleEnemyDamage = () => {
+  const handleEnemyDamage = (amount: number = 1) => {
+    if (playerStats.vampirism > 0) {
+      setPlayerStats(prev => ({
+        ...prev,
+        hp: Math.min(prev.maxHp, prev.hp + (Math.random() < 0.15 * prev.vampirism ? 1 : 0))
+      }));
+    }
     setCurrentEnemyHp(prev => {
-        const newHp = prev - 1;
-        if (newHp <= 0) {
-             setTimeout(() => handleLevelComplete(), 0);
-        }
+        const newHp = prev - amount;
+        if (newHp <= 0) setTimeout(() => handleLevelComplete(), 500);
         return newHp;
     });
   };
 
-  // Current Enemy Data
   const currentEnemyIndex = Math.min(level - 1, ENEMIES.length - 1);
   const currentEnemy = ENEMIES[currentEnemyIndex];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black relative">
-       {/* CRT Overlay */}
-      <div className="scanlines pointer-events-none" />
-      
-      {/* Main Game Container */}
-      <div className="relative w-full max-w-4xl aspect-[4/3] bg-zinc-900 shadow-2xl overflow-hidden border border-zinc-800">
+    <div className="min-h-screen flex items-center justify-center bg-[#020205] relative overflow-hidden">
+      <div className="scanlines pointer-events-none opacity-50" />
+      <div className="absolute inset-0 bg-gradient-to-tr from-cyan-950/20 via-black to-purple-950/20 pointer-events-none" />
+
+      <div className="relative w-full max-w-4xl aspect-[4/3] bg-zinc-950 shadow-[0_0_100px_rgba(0,0,0,1)] overflow-hidden border border-zinc-800 rounded-lg">
         
-        {/* State: MENU */}
         {phase === 'MENU' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20 space-y-8 animate-fade-in">
-            <h1 className="text-6xl md:text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-cyan-600 retro-font text-center glow-text tracking-tighter p-4">
+            <h1 className="text-6xl md:text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 via-white to-cyan-600 retro-font text-center glow-text tracking-tighter p-4 animate-pulse">
               NEON<br/>ROGUE
             </h1>
-            <p className="text-cyan-400/60 font-mono tracking-widest text-sm">V.1.0.0 // SYSTEM_READY</p>
-            <Button onClick={startGame} size="lg" className="animate-pulse">Initialize Run</Button>
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-cyan-400 font-mono tracking-widest text-sm">WEAPONS_SYSTEM: ENABLED</p>
+              <p className="text-zinc-600 font-mono text-xs uppercase">A roguelike combat paddle simulation</p>
+            </div>
+            <Button onClick={startGame} size="lg" className="hover:scale-105 transition-transform">Initialize Protocol</Button>
           </div>
         )}
 
-        {/* State: PLAYING */}
         {phase === 'PLAYING' && (
           <GameCanvas 
             context={{ level, player: playerStats, enemy: currentEnemy }}
             currentEnemyHp={currentEnemyHp}
-            onPlayerScore={handleEnemyDamage}
+            onPlayerScore={() => handleEnemyDamage(1)}
             onEnemyScore={handlePlayerDamage}
+            onProjectileHit={() => handleEnemyDamage(1)}
           />
         )}
 
-        {/* State: LEVEL UP */}
         {phase === 'LEVEL_UP' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-30 p-8">
-            <h2 className="text-4xl font-bold text-emerald-400 mb-2 retro-font">SECTOR CLEARED</h2>
-            <p className="text-zinc-400 mb-8 font-mono">Select Augmentation Protocol</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-30 p-8 backdrop-blur-md">
+            <h2 className="text-4xl font-bold text-emerald-400 mb-2 retro-font drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]">SECTOR_CLEARED</h2>
+            <p className="text-zinc-500 mb-8 font-mono tracking-[0.3em] uppercase text-xs">Select Combat Augmentation...</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl p-4">
               {availableUpgrades.map((upgrade) => (
                 <button
                   key={upgrade.id}
                   onMouseEnter={() => SoundSystem.playUiHover()}
                   onClick={() => handleSelectUpgrade(upgrade)}
                   className={`
-                    group relative p-6 border-2 flex flex-col items-start text-left h-64 justify-between transition-all duration-300 hover:-translate-y-2
-                    ${upgrade.rarity === 'legendary' ? 'border-amber-500 bg-amber-900/10 hover:shadow-[0_0_30px_rgba(245,158,11,0.4)]' : 
-                      upgrade.rarity === 'rare' ? 'border-purple-500 bg-purple-900/10 hover:shadow-[0_0_30px_rgba(168,85,247,0.4)]' : 
-                      'border-cyan-500 bg-cyan-900/10 hover:shadow-[0_0_30px_rgba(6,182,212,0.4)]'}
+                    group relative p-6 border-2 flex flex-col items-start text-left min-h-[18rem] justify-between transition-all duration-300 hover:-translate-y-3 hover:scale-105
+                    ${upgrade.rarity === 'legendary' ? 'border-amber-400 bg-amber-950/20 shadow-[0_0_30px_rgba(251,191,36,0.3)]' : 
+                      upgrade.rarity === 'rare' ? 'border-purple-500 bg-purple-950/20 shadow-[0_0_20px_rgba(168,85,247,0.2)]' : 
+                      'border-cyan-500 bg-cyan-950/20'}
                   `}
                 >
-                  <div>
-                    <span className={`text-xs font-bold uppercase tracking-widest px-2 py-1 mb-2 inline-block rounded
-                      ${upgrade.rarity === 'legendary' ? 'bg-amber-500 text-black' : 
+                  <div className="w-full">
+                    <div className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 mb-4 inline-block rounded-sm
+                      ${upgrade.rarity === 'legendary' ? 'bg-amber-400 text-black' : 
                         upgrade.rarity === 'rare' ? 'bg-purple-500 text-white' : 
                         'bg-cyan-500 text-black'}
                     `}>
                       {upgrade.rarity}
-                    </span>
-                    <h3 className="text-xl font-bold text-white mt-2 retro-font">{upgrade.name}</h3>
-                    <p className="text-zinc-300 mt-2 text-sm leading-relaxed">{upgrade.description}</p>
+                    </div>
+                    <h3 className="text-xl font-bold text-white mt-2 retro-font leading-tight group-hover:text-cyan-400 transition-colors">{upgrade.name}</h3>
+                    <div className="h-px w-full bg-white/10 my-3" />
+                    <p className="text-zinc-400 mt-2 text-xs leading-relaxed font-mono italic">{upgrade.description}</p>
                   </div>
-                  <div className="w-full text-right text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                    [ CLICK TO INSTALL ]
+                  <div className="w-full text-right text-[10px] opacity-60 font-mono text-zinc-500 group-hover:opacity-100 group-hover:text-white transition-all">
+                    &gt; INITIATE_INSTALL
                   </div>
                 </button>
               ))}
@@ -147,33 +202,30 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* State: GAME OVER */}
         {phase === 'GAME_OVER' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-950/90 z-40 space-y-6">
-            <h2 className="text-6xl text-red-500 font-bold retro-font glow-text">CRITICAL FAILURE</h2>
-            <div className="text-center font-mono text-red-200">
-                <p>SECTOR REACHED: {level}</p>
-                <p>FINAL SCORE: {playerStats.score}</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-950/90 z-40 space-y-6 animate-in fade-in zoom-in duration-500">
+            <h2 className="text-6xl md:text-8xl text-red-500 font-bold retro-font glow-text text-center leading-tight">CORE<br/>LOST</h2>
+            <div className="text-center font-mono text-red-200 bg-red-900/40 p-4 border border-red-500/50">
+                <p className="tracking-widest">SYSTEM_HALTED @ SECTOR {level}</p>
             </div>
-            <Button variant="danger" onClick={() => setPhase('MENU')}>REBOOT SYSTEM</Button>
+            <Button variant="danger" onClick={() => setPhase('MENU')} size="lg">Hard Reboot</Button>
           </div>
         )}
 
-        {/* State: VICTORY */}
         {phase === 'VICTORY' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-cyan-950/90 z-40 space-y-6">
-            <h2 className="text-6xl text-yellow-400 font-bold retro-font glow-text">SYSTEM SECURED</h2>
-            <p className="text-cyan-200 font-mono text-xl max-w-lg text-center">
-                You have defeated the Omega Core. The network is safe... for now.
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-cyan-950/90 z-40 space-y-6 animate-bounce-slow">
+            <h2 className="text-6xl text-yellow-400 font-bold retro-font glow-text text-center">OMEGA<br/>BYPASSED</h2>
+            <p className="text-cyan-200 font-mono text-xl max-w-lg text-center uppercase tracking-widest">
+                Network secured. Root access granted.
             </p>
-            <Button variant="secondary" onClick={() => setPhase('MENU')}>RETURN TO ROOT</Button>
+            <div className="w-48 h-1 bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,1)]" />
+            <Button variant="secondary" onClick={() => setPhase('MENU')}>Return to Source</Button>
           </div>
         )}
       </div>
       
-      {/* Mobile Controls Hint */}
-      <div className="fixed bottom-4 left-0 right-0 text-center text-zinc-500 text-xs md:hidden pointer-events-none">
-        TAP LEFT/RIGHT TO MOVE IF MOUSE UNAVAILABLE
+      <div className="absolute bottom-10 left-10 text-[10px] text-zinc-800 font-mono vertical-rl uppercase tracking-[1em] pointer-events-none select-none opacity-20">
+        Combat_Sim // Laser_Tech // Roguelike_Pong
       </div>
     </div>
   );
