@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { GameStatePhase, PlayerStats, Upgrade, GameContext } from './types';
 import { INITIAL_PLAYER_STATS, ENEMIES, UPGRADES, CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
 import { Button } from './components/Button';
@@ -7,49 +7,35 @@ import FPSCanvas from './components/FPSCanvas';
 import SideScrollerCanvas from './components/SideScrollerCanvas';
 import SpaceShooterCanvas from './components/SpaceShooterCanvas';
 import MatrixBreachCanvas from './components/MatrixBreachCanvas';
+import SurvivorCanvas from './components/SurvivorCanvas';
 import { SoundSystem } from './audio';
-
-const getContextualUpgrades = (stats: PlayerStats, count: number): Upgrade[] => {
-  const validUpgrades = UPGRADES.filter(u => {
-    if (u.id === 'fire_rate' && stats.weaponLevel === 0) return false;
-    if (u.id === 'weapon_1' && stats.weaponLevel >= 1) return false;
-    if (u.id === 'weapon_2' && stats.weaponLevel >= 2) return false;
-    if (u.id === 'weapon_3' && stats.weaponLevel >= 3) return false;
-    return true;
-  });
-
-  const results: Upgrade[] = [];
-  const pool = [...validUpgrades];
-
-  while (results.length < count && pool.length > 0) {
-    const roll = Math.random();
-    let targetRarity: Upgrade['rarity'] = 'common';
-    if (roll < 0.05) targetRarity = 'legendary';
-    else if (roll < 0.30) targetRarity = 'rare';
-    else targetRarity = 'common';
-
-    let candidates = pool.filter(u => u.rarity === targetRarity);
-    if (candidates.length === 0) candidates = pool;
-    const randomIndex = Math.floor(Math.random() * candidates.length);
-    const selected = candidates[randomIndex];
-    results.push(selected);
-    const poolIndex = pool.indexOf(selected);
-    if (poolIndex > -1) pool.splice(poolIndex, 1);
-  }
-  return results;
-};
 
 const App: React.FC = () => {
   const [phase, setPhase] = useState<GameStatePhase>('MENU');
   const [level, setLevel] = useState(1);
   const [prestige, setPrestige] = useState(0);
-  const [playerStats, setPlayerStats] = useState<PlayerStats>({ ...INITIAL_PLAYER_STATS, prestige: 0 });
+  const [playerStats, setPlayerStats] = useState<PlayerStats>({ ...INITIAL_PLAYER_STATS });
   const [currentEnemyHp, setCurrentEnemyHp] = useState(1);
   const [availableUpgrades, setAvailableUpgrades] = useState<Upgrade[]>([]);
-  
+  const [shake, setShake] = useState(0);
+
+  const triggerShake = (amount: number = 10) => {
+    setShake(amount);
+    setTimeout(() => setShake(0), 200);
+  };
+
+  const getUpgrades = (count: number): Upgrade[] => {
+    const pool = UPGRADES.filter(u => {
+      if (u.id === 'architect_key' && playerStats.hasArchitectKey) return false;
+      if (u.id === 'chrono_trigger' && playerStats.chronoTrigger) return false;
+      return true;
+    }).sort(() => Math.random() - 0.5);
+    return pool.slice(0, count);
+  };
+
   const startGame = () => {
     SoundSystem.init(); 
-    setPlayerStats({ ...INITIAL_PLAYER_STATS, currentCooldown: 0, prestige: prestige });
+    setPlayerStats({ ...INITIAL_PLAYER_STATS, prestige });
     setLevel(1);
     setCurrentEnemyHp(ENEMIES[0].hp);
     setPhase('PLAYING');
@@ -58,84 +44,80 @@ const App: React.FC = () => {
   const handleLevelComplete = () => {
     if (level >= ENEMIES.length) {
       setPhase('VICTORY');
-      SoundSystem.playLevelUp();
     } else {
-      setAvailableUpgrades(getContextualUpgrades(playerStats, 3));
+      setAvailableUpgrades(getUpgrades(3));
       setPhase('LEVEL_UP');
-      SoundSystem.playLevelUp();
     }
+    SoundSystem.playLevelUp();
+    triggerShake(15);
   };
 
   const handleSelectUpgrade = (upgrade: Upgrade) => {
     SoundSystem.playUpgradeSelect();
-    const nextStats = upgrade.apply(playerStats);
-    nextStats.shield = nextStats.maxShield;
-    setPlayerStats(nextStats);
+    setPlayerStats(prev => {
+      const next = upgrade.apply(prev);
+      return { ...next, shield: next.maxShield };
+    });
     const nextLevel = level + 1;
     setLevel(nextLevel);
     if (nextLevel <= ENEMIES.length) {
       setCurrentEnemyHp(ENEMIES[nextLevel - 1].hp); 
       setPhase('PLAYING');
     } else {
-       setPhase('VICTORY');
+      setPhase('VICTORY');
     }
   };
 
-  const handleGameOver = () => {
-    setPhase('GAME_OVER');
-    SoundSystem.playGameOver();
-  };
-
-  const handlePlayerDamage = () => {
+  const handlePlayerDamage = (amt: number = 1) => {
+    triggerShake(20);
     setPlayerStats(prev => {
-        if (prev.shield > 0) return { ...prev, shield: prev.shield - 1 };
-        const newHp = prev.hp - 1;
-        if (newHp <= 0) setTimeout(() => handleGameOver(), 0);
-        return { ...prev, hp: newHp };
+      if (prev.shield > 0) return { ...prev, shield: Math.max(0, prev.shield - amt) };
+      const newHp = prev.hp - amt;
+      if (newHp <= 0) setTimeout(() => setPhase('GAME_OVER'), 0);
+      return { ...prev, hp: newHp };
     });
   };
 
   const handleEnemyDamage = (amount: number = 1) => {
-    if (playerStats.vampirism > 0) {
-      setPlayerStats(prev => ({
-        ...prev,
-        hp: Math.min(prev.maxHp, prev.hp + (Math.random() < 0.15 * prev.vampirism ? 1 : 0))
-      }));
+    if (playerStats.vampirism > 0 && Math.random() < 0.25) {
+        setPlayerStats(p => ({ ...p, hp: Math.min(p.maxHp, p.hp + 1) }));
     }
     setCurrentEnemyHp(prev => {
-        const newHp = prev - amount;
-        if (newHp <= 0) setTimeout(() => handleLevelComplete(), 500);
-        return newHp;
+      const newHp = prev - amount;
+      if (newHp <= 0) setTimeout(() => handleLevelComplete(), 500);
+      return newHp;
     });
   };
 
   const currentEnemyIndex = Math.min(level - 1, ENEMIES.length - 1);
   const baseEnemy = ENEMIES[currentEnemyIndex];
-  
-  // Apply prestige scaling
   const scaledEnemy = {
-      ...baseEnemy,
-      paddleSpeed: baseEnemy.paddleSpeed + (prestige * 1.5),
-      reactionDelay: Math.max(0, baseEnemy.reactionDelay - (prestige * 2)),
+    ...baseEnemy,
+    paddleSpeed: baseEnemy.paddleSpeed + (prestige * 2),
+    reactionDelay: Math.max(0, baseEnemy.reactionDelay - (prestige * 3)),
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#020205] relative overflow-hidden">
-      <div className="scanlines pointer-events-none opacity-50" />
-      <div className="absolute inset-0 bg-gradient-to-tr from-cyan-950/20 via-black to-purple-950/20 pointer-events-none" />
-
-      <div className="relative w-full max-w-4xl aspect-[4/3] bg-zinc-950 shadow-[0_0_100px_rgba(0,0,0,1)] overflow-hidden border border-zinc-800 rounded-lg">
+    <div 
+      className={`min-h-screen flex items-center justify-center bg-[#050508] relative overflow-hidden transition-all duration-300`}
+      style={{ transform: shake > 0 ? `translate(${(Math.random()-0.5)*shake}px, ${(Math.random()-0.5)*shake}px)` : 'none' }}
+    >
+      <div className="scanlines pointer-events-none opacity-30 z-50" />
+      
+      <div className={`relative w-full max-w-4xl aspect-[4/3] bg-black shadow-[0_0_100px_rgba(0,0,0,1)] overflow-hidden border border-zinc-800 rounded-xl transition-all ${playerStats.hp === 1 ? 'animate-pulse border-red-900 shadow-[0_0_50px_rgba(255,0,0,0.3)]' : ''}`}>
         
         {phase === 'MENU' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20 space-y-8 animate-fade-in">
-            <h1 className="text-6xl md:text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 via-white to-cyan-600 retro-font text-center glow-text tracking-tighter p-4 animate-pulse">
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 space-y-8 bg-black/90 p-10">
+            <h1 className="text-7xl md:text-9xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-cyan-400 to-white retro-font text-center glow-text animate-pulse">
               NEON<br/>ROGUE
             </h1>
             <div className="flex flex-col items-center gap-2">
-              <p className="text-cyan-400 font-mono tracking-widest text-sm uppercase">Encryption: {prestige > 0 ? `PRESTIGE_LEVEL_${prestige}` : 'ACTIVE'}</p>
-              <p className="text-zinc-600 font-mono text-xs uppercase tracking-tighter">A Multi-Genre Combat Protocol</p>
+              <p className="text-cyan-500 font-mono tracking-widest text-lg uppercase drop-shadow-[0_0_10px_#06b6d4]">
+                PROTOCOL_v{prestige + 1}.{level}
+              </p>
+              {prestige > 0 && <p className="text-red-500 font-mono text-xs uppercase animate-bounce">PRESTIGE_{prestige}_ACTIVE</p>}
             </div>
-            <Button onClick={startGame} size="lg" className="hover:scale-105 transition-transform">Initialize Protocol</Button>
+            <Button onClick={startGame} size="lg">Initialize Combat</Button>
           </div>
         )}
 
@@ -143,90 +125,99 @@ const App: React.FC = () => {
           <GameCanvas 
             context={{ level, player: playerStats, enemy: scaledEnemy }}
             currentEnemyHp={currentEnemyHp}
-            onPlayerScore={() => handleEnemyDamage(1)}
-            onEnemyScore={handlePlayerDamage}
+            onPlayerScore={() => { handleEnemyDamage(1); triggerShake(5); }}
+            onEnemyScore={() => { handlePlayerDamage(1); SoundSystem.playScoreEnemy(); }}
             onProjectileHit={() => handleEnemyDamage(1)}
+            onSecretBreach={() => {
+                setPhase('SURVIVOR_MINIGAME');
+                triggerShake(30);
+            }}
           />
         )}
 
+        {phase === 'SURVIVOR_MINIGAME' && (
+          <SurvivorCanvas onComplete={() => {
+            setPlayerStats(p => ({ ...p, shield: p.maxShield + 5, hp: p.maxHp }));
+            setPhase('PLAYING');
+            triggerShake(10);
+          }} />
+        )}
+
         {phase === 'LEVEL_UP' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-30 p-8 backdrop-blur-md">
-            <h2 className="text-4xl font-bold text-emerald-400 mb-2 retro-font drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]">SECTOR_CLEARED</h2>
-            <p className="text-zinc-500 mb-8 font-mono tracking-[0.3em] uppercase text-xs">Select Combat Augmentation...</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl p-4">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-40 p-12">
+            <h2 className="text-5xl font-bold text-emerald-400 mb-2 retro-font drop-shadow-lg">SECTOR_CLEARED</h2>
+            <p className="text-zinc-500 mb-10 font-mono tracking-widest uppercase text-xs">Choose Your Augmentation</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
               {availableUpgrades.map((upgrade) => (
-                <button key={upgrade.id} onMouseEnter={() => SoundSystem.playUiHover()} onClick={() => handleSelectUpgrade(upgrade)} className={`group relative p-6 border-2 flex flex-col items-start text-left min-h-[18rem] justify-between transition-all duration-300 hover:-translate-y-3 hover:scale-105 ${upgrade.rarity === 'legendary' ? 'border-amber-400 bg-amber-950/20 shadow-[0_0_30px_rgba(251,191,36,0.3)]' : upgrade.rarity === 'rare' ? 'border-purple-500 bg-purple-950/20 shadow-[0_0_20px_rgba(168,85,247,0.2)]' : 'border-cyan-500 bg-cyan-950/20'}`}>
-                  <div className="w-full">
-                    <div className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 mb-4 inline-block rounded-sm ${upgrade.rarity === 'legendary' ? 'bg-amber-400 text-black' : upgrade.rarity === 'rare' ? 'bg-purple-500 text-white' : 'bg-cyan-500 text-black'}`}>{upgrade.rarity}</div>
-                    <h3 className="text-xl font-bold text-white mt-2 retro-font leading-tight group-hover:text-cyan-400 transition-colors">{upgrade.name}</h3>
-                    <div className="h-px w-full bg-white/10 my-3" />
-                    <p className="text-zinc-400 mt-2 text-xs leading-relaxed font-mono italic">{upgrade.description}</p>
+                <button 
+                  key={upgrade.id} 
+                  onClick={() => handleSelectUpgrade(upgrade)} 
+                  className={`group p-6 border-2 transition-all flex flex-col justify-between h-72 hover:scale-105 active:scale-95 ${upgrade.rarity === 'legendary' ? 'border-yellow-500 bg-yellow-950/20 shadow-[0_0_20px_rgba(234,179,8,0.2)]' : upgrade.rarity === 'rare' ? 'border-purple-500 bg-purple-950/20 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'border-cyan-500 bg-cyan-950/20'}`}
+                >
+                  <div className="space-y-4">
+                    <span className={`text-[10px] uppercase font-bold tracking-widest ${upgrade.rarity === 'legendary' ? 'text-yellow-400' : upgrade.rarity === 'rare' ? 'text-purple-400' : 'text-cyan-400'}`}>{upgrade.rarity}</span>
+                    <h3 className="text-xl font-bold text-white retro-font group-hover:text-white transition-colors">{upgrade.name}</h3>
+                    <p className="text-zinc-400 text-xs font-mono leading-relaxed">{upgrade.description}</p>
                   </div>
-                  <div className="w-full text-right text-[10px] opacity-60 font-mono text-zinc-500 group-hover:opacity-100 group-hover:text-white transition-all">&gt; INITIATE_INSTALL</div>
+                  <div className="text-[10px] text-right text-zinc-600 font-mono group-hover:text-white transition-all uppercase">Mount_Drive >></div>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {phase === 'GAME_OVER' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-950/90 z-40 space-y-6 animate-in fade-in zoom-in duration-500">
-            <h2 className="text-6xl md:text-8xl text-red-500 font-bold retro-font glow-text text-center leading-tight">CORE<br/>LOST</h2>
-            <div className="text-center font-mono text-red-200 bg-red-900/40 p-4 border border-red-500/50">
-                <p className="tracking-widest uppercase">Cycle Terminated @ Sector {level}</p>
+        {phase === 'FPS_HUNT' && (
+            <FPSCanvas player={playerStats} onVictory={() => setPhase('SPACE_SHOOTER')} onDamage={handlePlayerDamage} />
+        )}
+
+        {phase === 'SPACE_SHOOTER' && (
+            <SpaceShooterCanvas playerStats={playerStats} onVictory={() => setPhase('SIDE_SCROLLER')} onGameOver={() => setPhase('GAME_OVER')} onDamage={handlePlayerDamage} />
+        )}
+
+        {phase === 'SIDE_SCROLLER' && (
+            <SideScrollerCanvas playerStats={playerStats} onVictory={() => setPhase('MATRIX_BREACH')} onDamage={handlePlayerDamage} />
+        )}
+
+        {phase === 'MATRIX_BREACH' && (
+            <MatrixBreachCanvas onVictory={() => setPhase('CELEBRATION')} onDamage={handlePlayerDamage} />
+        )}
+
+        {phase === 'VICTORY' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-cyan-950/90 z-40 p-10 space-y-8 animate-in fade-in zoom-in">
+            <h2 className="text-6xl text-yellow-400 font-bold retro-font text-center glow-text leading-tight">CORE_BYPASSED</h2>
+            <p className="text-cyan-200 font-mono text-xl max-w-lg text-center uppercase tracking-[0.2em] leading-relaxed">
+                Infiltration successful. Initializing Phase 2: Total Data Hunt.
+            </p>
+            <Button variant="secondary" onClick={() => setPhase('FPS_HUNT')} size="lg">Begin The Hunt</Button>
+          </div>
+        )}
+
+        {phase === 'CELEBRATION' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-950/95 z-50 p-10 space-y-10">
+            <h2 className="text-8xl text-emerald-400 font-bold retro-font text-center glow-text">ASCENSION</h2>
+            <div className="space-y-4 text-center">
+                <p className="text-emerald-200 font-mono text-xl uppercase tracking-[0.3em]">Protocol Complete.</p>
+                <p className="text-emerald-500/60 font-mono text-xs max-w-md mx-auto">All sectors localized. Simulation recalibrating for infinite loop...</p>
             </div>
+            <Button variant="primary" onClick={() => {
+              setPrestige(p => p + 1);
+              setPhase('MENU');
+            }}>Loop Frequency (Prestige {prestige + 1})</Button>
+          </div>
+        )}
+
+        {phase === 'GAME_OVER' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-950/95 z-50 p-10 space-y-8 animate-in slide-in-from-top">
+            <h2 className="text-8xl text-red-600 font-bold retro-font text-center glow-text">FATAL_ERR</h2>
+            <p className="text-red-200 font-mono tracking-[0.5em] uppercase text-sm">System integrity: 0.00%</p>
             <Button variant="danger" onClick={() => setPhase('MENU')} size="lg">Hard Reboot</Button>
           </div>
         )}
 
-        {phase === 'VICTORY' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-cyan-950/90 z-40 space-y-6 animate-bounce-slow">
-            <h2 className="text-6xl text-yellow-400 font-bold retro-font glow-text text-center leading-tight">OMEGA<br/>BYPASSED</h2>
-            <p className="text-cyan-200 font-mono text-xl max-w-lg text-center uppercase tracking-widest">
-                Network secured. Infiltrating root grid...
-            </p>
-            <div className="w-48 h-1 bg-yellow-400 shadow-[0_0_20px_rgba(250,204,21,1)]" />
-            <Button variant="primary" onClick={() => {
-                setPhase('FPS_HUNT');
-                SoundSystem.updateDrone(0, true);
-            }} size="lg">Phase 2: The Hunt</Button>
-          </div>
-        )}
-
-        {phase === 'FPS_HUNT' && (
-           <FPSCanvas player={playerStats} onVictory={() => setPhase('SPACE_SHOOTER')} />
-        )}
-
-        {phase === 'SPACE_SHOOTER' && (
-           <SpaceShooterCanvas playerStats={playerStats} onVictory={() => setPhase('SIDE_SCROLLER')} onGameOver={handleGameOver} />
-        )}
-
-        {phase === 'SIDE_SCROLLER' && (
-           <SideScrollerCanvas playerStats={playerStats} onVictory={() => setPhase('MATRIX_BREACH')} />
-        )}
-
-        {phase === 'MATRIX_BREACH' && (
-           <MatrixBreachCanvas onVictory={() => setPhase('CELEBRATION')} />
-        )}
-
-        {phase === 'CELEBRATION' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-950/90 z-40 space-y-6">
-            <h2 className="text-6xl text-emerald-400 font-bold retro-font glow-text text-center leading-tight">GRID_ROOT<br/>CAPTURED</h2>
-            <p className="text-emerald-200 font-mono text-xl max-w-lg text-center uppercase tracking-[0.2em]">
-                Protocol Complete. Leveling up simulation...
-            </p>
-            <div className="flex gap-4">
-              <Button variant="secondary" onClick={() => {
-                setPrestige(p => p + 1);
-                setPhase('MENU');
-              }} size="lg">Ascend to Prestige {prestige + 1}</Button>
-            </div>
-          </div>
-        )}
       </div>
       
-      <div className="absolute bottom-10 left-10 text-[10px] text-zinc-800 font-mono vertical-rl uppercase tracking-[1em] pointer-events-none select-none opacity-20">
-        Grid_Infiltration // Prestige_{prestige} // Full_Cycle
+      <div className="absolute bottom-6 right-6 font-mono text-[10px] text-zinc-800 select-none pointer-events-none tracking-[1em] opacity-40 uppercase">
+        Prestige_{prestige} // Sector_{level} // Rogue_Active
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY' | 'FPS_HUNT' | 'SPACE_SHOOTER' | 'SIDE_SCROLLER' | 'MATRIX_BREACH' | 'CELEBRATION';
+export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY' | 'FPS_HUNT' | 'SPACE_SHOOTER' | 'SIDE_SCROLLER' | 'MATRIX_BREACH' | 'SURVIVOR_MINIGAME' | 'CELEBRATION';
 
 export interface Vector {
   x: number;
@@ -20,6 +20,7 @@ export interface Particle {
   maxLife: number;
   color: string;
   size: number;
+  glow?: boolean;
 }
 
 export interface Projectile {
@@ -31,23 +32,28 @@ export interface Projectile {
   color: string;
   active: boolean;
   damage: number;
+  owner: 'player' | 'enemy';
 }
 
 export interface Ball extends Entity {
   vel: Vector;
   speed: number;
   active: boolean;
+  trail: Vector[];
 }
 
 export interface Paddle extends Entity {
   speed: number;
-  targetY?: number; // For AI
-  glitchTimer?: number; // Frames frozen
+  targetY?: number;
+  glitchTimer?: number;
+  style: 'AGGRESSIVE' | 'DEFENSIVE' | 'CALCULATING';
 }
 
 export interface PlayerStats {
   hp: number;
   maxHp: number;
+  stamina: number;
+  maxStamina: number;
   score: number;
   paddleHeight: number;
   paddleSpeed: number;
@@ -57,13 +63,18 @@ export interface PlayerStats {
   vampirism: number;
   shield: number; 
   maxShield: number; 
-  magnetism: number; 
-  timeDilation: boolean; 
-  glitchChance: number; 
-  weaponLevel: number; // 0: None, 1: Basic, 2: Twin, 3: Omega
+  weaponLevel: number; 
   shootCooldown: number;
   currentCooldown: number;
   prestige: number;
+  hasArchitectKey: boolean;
+  chronoTrigger: boolean; // Manual time slow
+}
+
+export interface SaveData {
+  prestige: number;
+  level: number;
+  playerStats: PlayerStats;
 }
 
 export interface EnemyStats {
@@ -75,6 +86,7 @@ export interface EnemyStats {
   reactionDelay: number; 
   errorMargin: number; 
   color: string;
+  style: Paddle['style'];
 }
 
 export interface Upgrade {
@@ -91,13 +103,16 @@ export interface GameContext {
   enemy: EnemyStats;
 }
 
-// Phase Specifics
 export interface FPSEnemy {
+  id: number;
   x: number;
   y: number;
   hp: number;
+  maxHp: number;
   color: string;
   dead: boolean;
+  lastShot: number;
+  state: 'IDLE' | 'HUNTING' | 'FIRING';
 }
 
 export interface PlatformEnemy extends Entity {
