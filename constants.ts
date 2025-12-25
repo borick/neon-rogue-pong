@@ -7,7 +7,7 @@ export const PADDLE_WIDTH = 15;
 export const BALL_SIZE = 12;
 
 export const INITIAL_BALL_SPEED = 4.0; 
-export const MAX_BALL_SPEED = 26;      
+export const MAX_BALL_SPEED = 28;      
 
 export const INITIAL_PLAYER_STATS: PlayerStats = {
   hp: 3,
@@ -60,7 +60,7 @@ export const META_UPGRADES: MetaUpgrade[] = [
     description: 'Increase Neural Shard gain by 25% per rank.',
     cost: 20,
     maxLevel: 8,
-    effect: () => ({}) // Handled in App.tsx logic
+    effect: () => ({}) 
   },
   {
     id: 'meta_weapon',
@@ -88,48 +88,48 @@ export const ENEMIES: EnemyStats[] = [
         name: "Gateway Guardian",
         hp: 1, 
         maxHp: 1,
-        paddleHeight: 160, 
-        paddleSpeed: 2.0,  
-        reactionDelay: 60, 
-        errorMargin: 100,  
+        paddleHeight: 180, 
+        paddleSpeed: 1.5,  
+        reactionDelay: 100, 
+        errorMargin: 150,  
         color: '#22d3ee'
     },
     {
         name: "Sentry Unit 02",
         hp: 3,
         maxHp: 3,
-        paddleHeight: 110,
-        paddleSpeed: 4.0,
-        reactionDelay: 30,
-        errorMargin: 40,
+        paddleHeight: 120,
+        paddleSpeed: 5.0,
+        reactionDelay: 40,
+        errorMargin: 60,
         color: '#4ade80'
     },
     {
         name: "Neural Interceptor",
-        hp: 6,
-        maxHp: 6,
-        paddleHeight: 90,
-        paddleSpeed: 9.0,
-        reactionDelay: 12,
-        errorMargin: 20,
+        hp: 8,
+        maxHp: 8,
+        paddleHeight: 100,
+        paddleSpeed: 10.0,
+        reactionDelay: 15,
+        errorMargin: 30,
         color: '#f472b6'
     },
     {
         name: "Void Colossus",
-        hp: 15,
-        maxHp: 15,
-        paddleHeight: 280, 
-        paddleSpeed: 5.5,
+        hp: 20,
+        maxHp: 20,
+        paddleHeight: 300, 
+        paddleSpeed: 15.0, 
         reactionDelay: 5,
-        errorMargin: 5,
+        errorMargin: 10,
         color: '#818cf8'
     },
     {
         name: "OMEGA ARCHITECT",
-        hp: 40, 
-        maxHp: 40,
-        paddleHeight: 80, 
-        paddleSpeed: 18,  
+        hp: 50, 
+        maxHp: 50,
+        paddleHeight: 70, 
+        paddleSpeed: 22.0,  
         reactionDelay: 0, 
         errorMargin: 0,   
         color: '#facc15'

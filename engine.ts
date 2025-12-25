@@ -76,7 +76,7 @@ export const updateGame = (
   if (mouseY !== null) {
      const targetY = mouseY - playerPaddle.height / 2;
      const dy = targetY - playerPaddle.pos.y;
-     nextPlayerY += dy * 0.4; // Smooth follow
+     nextPlayerY += dy * 0.45; // Slightly faster snap for player
   } else {
      nextPlayerY += inputY * playerPaddle.speed;
   }
@@ -87,27 +87,27 @@ export const updateGame = (
   if (wantsToShoot && context.player.weaponLevel > 0 && context.player.currentCooldown <= 0) {
     newEvent = 'shoot';
     const pColor = context.player.weaponLevel === 3 ? '#facc15' : '#22d3ee';
-    const pSize = context.player.weaponLevel === 3 ? 20 : 10;
-    const pDamage = context.player.weaponLevel === 3 ? 3 : 1;
+    const pSize = context.player.weaponLevel === 3 ? 24 : 12;
+    const pDamage = context.player.weaponLevel === 3 ? 5 : 1;
     
     if (context.player.weaponLevel === 1) {
       nextProjectiles.push({
         id: Math.random(), pos: { x: playerPaddle.pos.x + playerPaddle.width, y: playerPaddle.pos.y + playerPaddle.height/2 },
-        vel: { x: 18, y: 0 }, width: pSize, height: pSize/2, color: pColor, active: true, damage: pDamage
+        vel: { x: 20, y: 0 }, width: pSize, height: pSize/2, color: pColor, active: true, damage: pDamage
       });
     } else if (context.player.weaponLevel === 2) {
       nextProjectiles.push({
         id: Math.random(), pos: { x: playerPaddle.pos.x + playerPaddle.width, y: playerPaddle.pos.y + 10 },
-        vel: { x: 22, y: 0 }, width: pSize, height: pSize/2, color: pColor, active: true, damage: pDamage
+        vel: { x: 25, y: 0 }, width: pSize, height: pSize/2, color: pColor, active: true, damage: pDamage
       });
       nextProjectiles.push({
         id: Math.random(), pos: { x: playerPaddle.pos.x + playerPaddle.width, y: playerPaddle.pos.y + playerPaddle.height - 10 },
-        vel: { x: 22, y: 0 }, width: pSize, height: pSize/2, color: pColor, active: true, damage: pDamage
+        vel: { x: 25, y: 0 }, width: pSize, height: pSize/2, color: pColor, active: true, damage: pDamage
       });
     } else if (context.player.weaponLevel === 3) {
       nextProjectiles.push({
-        id: Math.random(), pos: { x: playerPaddle.pos.x + playerPaddle.width, y: playerPaddle.pos.y + playerPaddle.height/2 - 10 },
-        vel: { x: 30, y: 0 }, width: 60, height: 25, color: pColor, active: true, damage: 5
+        id: Math.random(), pos: { x: playerPaddle.pos.x + playerPaddle.width, y: playerPaddle.pos.y + playerPaddle.height/2 - 12 },
+        vel: { x: 35, y: 0 }, width: 80, height: 30, color: pColor, active: true, damage: 10
       });
     }
   }
@@ -124,9 +124,16 @@ export const updateGame = (
     const effectiveEnemySpeed = enemyPaddle.speed * context.player.enemySpeedMult;
     
     if (ball.vel.x > 0) {
-      const delayScale = Math.min(1, (CANVAS_WIDTH - ball.pos.x) / (CANVAS_WIDTH / 2));
+      const distToEnemy = (CANVAS_WIDTH - ball.pos.x);
+      const delayScale = Math.min(1, distToEnemy / (CANVAS_WIDTH / 2));
       const margin = context.enemy.errorMargin * (0.5 + Math.sin(Date.now() * 0.01) * 0.5);
-      enemyTargetY = ball.pos.y - enemyPaddle.height / 2 + (Math.random() - 0.5) * margin;
+      
+      // Artificial delay logic: Sentinels 1 and 2 "think" slower
+      if (context.level <= 2 && distToEnemy > CANVAS_WIDTH * 0.4) {
+          enemyTargetY = enemyPaddle.pos.y; 
+      } else {
+          enemyTargetY = ball.pos.y - enemyPaddle.height / 2 + (Math.random() - 0.5) * margin;
+      }
     }
 
     const dy = enemyTargetY - enemyPaddle.pos.y;
@@ -151,8 +158,8 @@ export const updateGame = (
     )) {
       p.active = false;
       newEvent = 'proj_hit';
-      newEnemy.glitchTimer = 20; // Stun enemy briefly
-      newParticles = createParticle(p.pos.x, p.pos.y + p.height/2, p.color, 20);
+      newEnemy.glitchTimer = 25; // Stun enemy
+      newParticles = createParticle(p.pos.x, p.pos.y + p.height/2, p.color, 25);
     }
   });
 
@@ -165,7 +172,7 @@ export const updateGame = (
     const centerBall = nextBall.pos.y + nextBall.height / 2;
     const dy = centerPlayer - centerBall;
     const distFactor = Math.max(0, (CANVAS_WIDTH / 2 - ball.pos.x) / (CANVAS_WIDTH / 2));
-    nextBall.vel.y += dy * context.player.magnetism * 0.02 * distFactor;
+    nextBall.vel.y += dy * context.player.magnetism * 0.03 * distFactor;
   }
 
   nextBall.pos.x += nextBall.vel.x * dt;
@@ -173,7 +180,7 @@ export const updateGame = (
 
   // Wall collisions
   if (nextBall.pos.y <= 0 || nextBall.pos.y + nextBall.height >= CANVAS_HEIGHT) {
-    nextBall.vel.y *= -1.02;
+    nextBall.vel.y *= -1.03; // Slight vertical acceleration
     nextBall.pos.y = nextBall.pos.y <= 0 ? 0 : CANVAS_HEIGHT - nextBall.height;
     if (newEvent === 'none') newEvent = 'wall';
     newParticles = createParticle(nextBall.pos.x, nextBall.pos.y, '#ffffff', 5);
@@ -185,13 +192,16 @@ export const updateGame = (
       { x: paddle.pos.x, y: paddle.pos.y, w: paddle.width, h: paddle.height }
     )) {
       nextBall.vel.x *= -1;
-      const power = isPlayer ? context.player.ballPower : 1.05;
+      
+      // Progressive ball power based on level
+      const basePower = 1.05 + (context.level * 0.01);
+      const power = isPlayer ? Math.max(basePower, context.player.ballPower) : basePower;
       nextBall.speed = Math.min(MAX_BALL_SPEED * context.player.ballSpeedMult, nextBall.speed * power);
       
       const centerPaddle = paddle.pos.y + paddle.height / 2;
       const centerBall = nextBall.pos.y + nextBall.height / 2;
       const relativeIntersectY = (centerPaddle - centerBall) / (paddle.height / 2);
-      const bounceAngle = relativeIntersectY * (Math.PI / 3); // Steeper bounce angles
+      const bounceAngle = relativeIntersectY * (Math.PI / 2.8); // Slightly tighter bounce
       
       const direction = isPlayer ? 1 : -1;
       nextBall.vel.x = direction * nextBall.speed * Math.cos(bounceAngle);
