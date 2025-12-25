@@ -1,5 +1,4 @@
-
-export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY' | 'FPS_HUNT' | 'SIDE_SCROLLER' | 'META_LAB' | 'ACHIEVEMENTS';
+export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY' | 'FPS_HUNT' | 'SPACE_SHOOTER' | 'SIDE_SCROLLER' | 'MATRIX_BREACH' | 'CELEBRATION';
 
 export interface Vector {
   x: number;
@@ -42,8 +41,8 @@ export interface Ball extends Entity {
 
 export interface Paddle extends Entity {
   speed: number;
-  targetY?: number;
-  glitchTimer?: number;
+  targetY?: number; // For AI
+  glitchTimer?: number; // Frames frozen
 }
 
 export interface PlayerStats {
@@ -61,9 +60,10 @@ export interface PlayerStats {
   magnetism: number; 
   timeDilation: boolean; 
   glitchChance: number; 
-  weaponLevel: number;
+  weaponLevel: number; // 0: None, 1: Basic, 2: Twin, 3: Omega
   shootCooldown: number;
   currentCooldown: number;
+  prestige: number;
 }
 
 export interface EnemyStats {
@@ -85,49 +85,29 @@ export interface Upgrade {
   apply: (stats: PlayerStats) => PlayerStats;
 }
 
-export interface MetaUpgrade {
-  id: string;
-  name: string;
-  description: string;
-  cost: number;
-  maxLevel: number;
-  effect: (level: number) => Partial<PlayerStats>;
-}
-
-export interface Achievement {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-}
-
-export interface SaveData {
-  shards: number;
-  totalShardsEarned: number;
-  metaLevels: Record<string, number>;
-  unlockedAchievements: string[];
-  highScore: number;
-  totalKills: number;
-}
-
 export interface GameContext {
   level: number;
   player: PlayerStats;
   enemy: EnemyStats;
 }
 
+// Phase Specifics
 export interface FPSEnemy {
-  id: string;
   x: number;
   y: number;
   hp: number;
   color: string;
   dead: boolean;
-  dist?: number;
 }
 
 export interface PlatformEnemy extends Entity {
   velX: number;
   hp: number;
+  dead: boolean;
+}
+
+export interface ShooterEnemy extends Entity {
+  hp: number;
+  lastShot: number;
   dead: boolean;
 }
