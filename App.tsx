@@ -1,223 +1,393 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { GameStatePhase, PlayerStats, Upgrade, GameContext } from './types';
-import { INITIAL_PLAYER_STATS, ENEMIES, UPGRADES, CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { GameStatePhase, PlayerStats, Upgrade, GameContext, SaveData, Achievement } from './types';
+import { INITIAL_PLAYER_STATS, ENEMIES, UPGRADES, CANVAS_WIDTH, CANVAS_HEIGHT, META_UPGRADES, ACHIEVEMENTS_LIST } from './constants';
 import { Button } from './components/Button';
 import GameCanvas from './components/GameCanvas';
 import FPSCanvas from './components/FPSCanvas';
 import SideScrollerCanvas from './components/SideScrollerCanvas';
-import SpaceShooterCanvas from './components/SpaceShooterCanvas';
-import MatrixBreachCanvas from './components/MatrixBreachCanvas';
-import SurvivorCanvas from './components/SurvivorCanvas';
 import { SoundSystem } from './audio';
+import { Persistence } from './persistence';
+
+const getContextualUpgrades = (stats: PlayerStats, count: number): Upgrade[] => {
+  const validUpgrades = UPGRADES.filter(u => {
+    if (u.id === 'weapon_1' && stats.weaponLevel >= 1) return false;
+    if (u.id === 'weapon_2' && (stats.weaponLevel < 1 || stats.weaponLevel >= 2)) return false;
+    if (u.id === 'weapon_3' && (stats.weaponLevel < 2 || stats.weaponLevel >= 3)) return false;
+    if (u.id === 'fire_rate' && stats.weaponLevel === 0) return false;
+    return true;
+  });
+  
+  const results: Upgrade[] = [];
+  const pool = [...validUpgrades];
+  
+  while (results.length < count && pool.length > 0) {
+    const roll = Math.random();
+    let targetRarity: Upgrade['rarity'] = 'common';
+    if (roll < 0.1) targetRarity = 'legendary';
+    else if (roll < 0.35) targetRarity = 'rare';
+    else targetRarity = 'common';
+    
+    let candidates = pool.filter(u => u.rarity === targetRarity);
+    if (candidates.length === 0) candidates = pool;
+    
+    const randomIndex = Math.floor(Math.random() * candidates.length);
+    const selected = candidates[randomIndex];
+    results.push(selected);
+    
+    const poolIndex = pool.indexOf(selected);
+    if (poolIndex > -1) pool.splice(poolIndex, 1);
+  }
+  return results;
+};
 
 const App: React.FC = () => {
+  const [save, setSave] = useState<SaveData>(Persistence.load());
   const [phase, setPhase] = useState<GameStatePhase>('MENU');
+  const [isPaused, setIsPaused] = useState(false);
   const [level, setLevel] = useState(1);
-  const [prestige, setPrestige] = useState(0);
-  const [playerStats, setPlayerStats] = useState<PlayerStats>({ ...INITIAL_PLAYER_STATS });
+  const [playerStats, setPlayerStats] = useState<PlayerStats>(INITIAL_PLAYER_STATS);
   const [currentEnemyHp, setCurrentEnemyHp] = useState(1);
   const [availableUpgrades, setAvailableUpgrades] = useState<Upgrade[]>([]);
-  const [shake, setShake] = useState(0);
+  const [activeAchievement, setActiveAchievement] = useState<Achievement | null>(null);
+  const [shardsEarnedThisRun, setShardsEarnedThisRun] = useState(0);
+  const [damagedTakenThisSector, setDamagedTakenThisSector] = useState(0);
 
-  const triggerShake = (amount: number = 10) => {
-    setShake(amount);
-    setTimeout(() => setShake(0), 200);
-  };
+  useEffect(() => {
+    Persistence.save(save);
+  }, [save]);
 
-  const getUpgrades = (count: number): Upgrade[] => {
-    const pool = UPGRADES.filter(u => {
-      if (u.id === 'architect_key' && playerStats.hasArchitectKey) return false;
-      if (u.id === 'chrono_trigger' && playerStats.chronoTrigger) return false;
-      return true;
-    }).sort(() => Math.random() - 0.5);
-    return pool.slice(0, count);
-  };
+  const triggerAchievement = useCallback((id: string) => {
+    if (save.unlockedAchievements.includes(id)) return;
+    const achieve = ACHIEVEMENTS_LIST.find(a => a.id === id);
+    if (achieve) {
+      SoundSystem.playAchievement();
+      setActiveAchievement(achieve);
+      setSave(prev => ({ ...prev, unlockedAchievements: [...prev.unlockedAchievements, id] }));
+      setTimeout(() => setActiveAchievement(null), 4000);
+    }
+  }, [save.unlockedAchievements]);
 
   const startGame = () => {
     SoundSystem.init(); 
-    setPlayerStats({ ...INITIAL_PLAYER_STATS, prestige });
+    let baseStats = { ...INITIAL_PLAYER_STATS };
+    
+    META_UPGRADES.forEach(meta => {
+      const lvl = save.metaLevels[meta.id] || 0;
+      if (lvl > 0) {
+        baseStats = { ...baseStats, ...meta.effect(lvl) };
+      }
+    });
+
+    setPlayerStats(baseStats);
     setLevel(1);
+    setIsPaused(false);
     setCurrentEnemyHp(ENEMIES[0].hp);
+    setShardsEarnedThisRun(0);
+    setDamagedTakenThisSector(0);
     setPhase('PLAYING');
+
+    setSave(prev => {
+        const totalRuns = (prev.highScore || 0) + 1; // Hacky way to track attempts if no separate counter exists
+        if (totalRuns >= 10) triggerAchievement('persistent');
+        return { ...prev, highScore: totalRuns };
+    });
   };
 
-  const handleLevelComplete = () => {
+  const handleLevelComplete = useCallback(() => {
+    setIsPaused(false);
+    if (level === 1) triggerAchievement('first_blood');
+    if (damagedTakenThisSector === 0) triggerAchievement('flawless');
+    if (level === 4) triggerAchievement('bullet_hell');
+
+    const shardLvl = save.metaLevels['meta_shards'] || 0;
+    const multiplier = 1 + (shardLvl * 0.25);
+    const shards = Math.floor(level * 5 * multiplier);
+    
+    setShardsEarnedThisRun(prev => prev + shards);
+    setSave(prev => ({ ...prev, shards: prev.shards + shards, totalShardsEarned: prev.totalShardsEarned + shards }));
+
+    if (shardsEarnedThisRun + shards >= 100) triggerAchievement('rich');
+
     if (level >= ENEMIES.length) {
+      triggerAchievement('architect_down');
       setPhase('VICTORY');
+      SoundSystem.playLevelUp();
     } else {
-      setAvailableUpgrades(getUpgrades(3));
+      setAvailableUpgrades(getContextualUpgrades(playerStats, 3));
       setPhase('LEVEL_UP');
+      SoundSystem.playLevelUp();
+      setDamagedTakenThisSector(0);
     }
-    SoundSystem.playLevelUp();
-    triggerShake(15);
-  };
+  }, [level, playerStats, damagedTakenThisSector, triggerAchievement, save.metaLevels, shardsEarnedThisRun]);
 
   const handleSelectUpgrade = (upgrade: Upgrade) => {
     SoundSystem.playUpgradeSelect();
-    setPlayerStats(prev => {
-      const next = upgrade.apply(prev);
-      return { ...next, shield: next.maxShield };
-    });
+    const nextStats = upgrade.apply(playerStats);
+    nextStats.shield = nextStats.maxShield; 
+    setPlayerStats(nextStats);
+
+    if (nextStats.weaponLevel === 3) triggerAchievement('weapon_master');
+    
     const nextLevel = level + 1;
     setLevel(nextLevel);
     if (nextLevel <= ENEMIES.length) {
       setCurrentEnemyHp(ENEMIES[nextLevel - 1].hp); 
       setPhase('PLAYING');
     } else {
-      setPhase('VICTORY');
+       setPhase('VICTORY');
     }
   };
 
-  const handlePlayerDamage = (amt: number = 1) => {
-    triggerShake(20);
-    setPlayerStats(prev => {
-      if (prev.shield > 0) return { ...prev, shield: Math.max(0, prev.shield - amt) };
-      const newHp = prev.hp - amt;
-      if (newHp <= 0) setTimeout(() => setPhase('GAME_OVER'), 0);
-      return { ...prev, hp: newHp };
-    });
+  const handleGameOver = () => {
+    setIsPaused(false);
+    setPhase('GAME_OVER');
+    SoundSystem.playGameOver();
   };
 
-  const handleEnemyDamage = (amount: number = 1) => {
-    if (playerStats.vampirism > 0 && Math.random() < 0.25) {
-        setPlayerStats(p => ({ ...p, hp: Math.min(p.maxHp, p.hp + 1) }));
+  const handlePlayerDamage = useCallback(() => {
+    setDamagedTakenThisSector(prev => prev + 1);
+    setPlayerStats(prev => {
+        if (prev.shield > 0) return { ...prev, shield: prev.shield - 1 };
+        const newHp = prev.hp - 1;
+        if (newHp <= 0) setTimeout(() => handleGameOver(), 10);
+        return { ...prev, hp: newHp };
+    });
+  }, []);
+
+  const handleEnemyDamage = useCallback((amount: number = 1) => {
+    if (playerStats.vampirism > 0) {
+      setPlayerStats(prev => ({
+        ...prev,
+        hp: Math.min(prev.maxHp, prev.hp + (Math.random() < 0.1 * prev.vampirism ? 1 : 0))
+      }));
     }
     setCurrentEnemyHp(prev => {
-      const newHp = prev - amount;
-      if (newHp <= 0) setTimeout(() => handleLevelComplete(), 500);
-      return newHp;
+        const newHp = prev - amount;
+        if (newHp <= 0) setTimeout(() => handleLevelComplete(), 600);
+        return newHp;
     });
+  }, [playerStats.vampirism, handleLevelComplete]);
+
+  const resetSave = () => {
+    if (confirm("CRITICAL: ALL NEURAL PROGRESS WILL BE PURGED. PROCEED?")) {
+      setSave(Persistence.reset());
+      SoundSystem.playUiClick();
+    }
   };
 
   const currentEnemyIndex = Math.min(level - 1, ENEMIES.length - 1);
-  const baseEnemy = ENEMIES[currentEnemyIndex];
-  const scaledEnemy = {
-    ...baseEnemy,
-    paddleSpeed: baseEnemy.paddleSpeed + (prestige * 2),
-    reactionDelay: Math.max(0, baseEnemy.reactionDelay - (prestige * 3)),
-  };
+  const currentEnemy = ENEMIES[currentEnemyIndex];
 
   return (
-    <div 
-      className={`min-h-screen flex items-center justify-center bg-[#050508] relative overflow-hidden transition-all duration-300`}
-      style={{ transform: shake > 0 ? `translate(${(Math.random()-0.5)*shake}px, ${(Math.random()-0.5)*shake}px)` : 'none' }}
-    >
-      <div className="scanlines pointer-events-none opacity-30 z-50" />
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 overflow-hidden relative">
+      <div className="scanlines pointer-events-none opacity-40" />
       
-      <div className={`relative w-full max-w-4xl aspect-[4/3] bg-black shadow-[0_0_100px_rgba(0,0,0,1)] overflow-hidden border border-zinc-800 rounded-xl transition-all ${playerStats.hp === 1 ? 'animate-pulse border-red-900 shadow-[0_0_50px_rgba(255,0,0,0.3)]' : ''}`}>
+      {activeAchievement && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-[100] bg-zinc-900 border-2 border-amber-400 p-4 rounded shadow-2xl flex items-center gap-4 animate-in slide-in-from-top-12 duration-500">
+          <div className="text-3xl">{activeAchievement.icon}</div>
+          <div>
+            <div className="text-amber-400 font-bold retro-font text-[10px] tracking-widest">ACHIEVEMENT_UNLOCKED</div>
+            <div className="text-white font-bold">{activeAchievement.name}</div>
+          </div>
+        </div>
+      )}
+
+      <div className="relative w-full max-w-4xl aspect-[4/3] bg-black shadow-[0_0_150px_rgba(0,0,0,1)] overflow-hidden border border-zinc-800 rounded-xl">
         
-        {phase === 'MENU' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 space-y-8 bg-black/90 p-10">
-            <h1 className="text-7xl md:text-9xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-cyan-400 to-white retro-font text-center glow-text animate-pulse">
-              NEON<br/>ROGUE
-            </h1>
-            <div className="flex flex-col items-center gap-2">
-              <p className="text-cyan-500 font-mono tracking-widest text-lg uppercase drop-shadow-[0_0_10px_#06b6d4]">
-                PROTOCOL_v{prestige + 1}.{level}
-              </p>
-              {prestige > 0 && <p className="text-red-500 font-mono text-xs uppercase animate-bounce">PRESTIGE_{prestige}_ACTIVE</p>}
+        {isPaused && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-50 backdrop-blur-md">
+            <h2 className="text-6xl font-bold text-cyan-400 retro-font glow-text mb-8 tracking-widest animate-pulse">PAUSED</h2>
+            <div className="flex flex-col gap-4">
+              <Button onClick={() => setIsPaused(false)} size="lg">RESUME_SESSION</Button>
+              <Button onClick={() => { setIsPaused(false); setPhase('MENU'); }} variant="danger" size="md">ABORT_PROTOCOL</Button>
             </div>
-            <Button onClick={startGame} size="lg">Initialize Combat</Button>
+          </div>
+        )}
+
+        {phase === 'MENU' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-20 space-y-8 animate-in fade-in duration-700">
+            <div className="text-center group">
+                <h1 className="text-7xl md:text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-cyan-400 via-white to-indigo-600 retro-font glow-text tracking-tighter p-4 group-hover:scale-105 transition-transform duration-500">
+                NEON<br/>ROGUE
+                </h1>
+                <div className="mt-2 text-cyan-400 font-mono text-[10px] uppercase tracking-[0.5em] animate-pulse">v1.2 - Kernel_Rebuilt</div>
+            </div>
+            
+            <div className="flex flex-col items-center space-y-4 w-full max-w-xs">
+                <Button onClick={startGame} size="lg" className="w-full">INITIALIZE RUN</Button>
+                <div className="grid grid-cols-2 gap-4 w-full">
+                  <Button variant="secondary" onClick={() => setPhase('META_LAB')} size="sm">META_LAB</Button>
+                  <Button variant="secondary" onClick={() => setPhase('ACHIEVEMENTS')} size="sm">LOGS</Button>
+                </div>
+                <button onClick={resetSave} className="text-red-900 hover:text-red-500 transition-colors uppercase text-[9px] font-mono tracking-widest mt-4">Wipe System Memory</button>
+            </div>
+
+            <div className="absolute bottom-8 right-8 text-right font-mono">
+              <div className="text-zinc-600 text-[10px] uppercase">Neural_Shards</div>
+              <div className="text-amber-400 text-xl font-bold glow-text">◊ {save.shards}</div>
+            </div>
+          </div>
+        )}
+
+        {phase === 'META_LAB' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/95 z-30 p-8">
+            <div className="w-full max-w-3xl">
+                <div className="flex justify-between items-end mb-6">
+                    <h2 className="text-3xl font-bold text-amber-400 retro-font tracking-tighter">NEURAL_KERNEL</h2>
+                    <div className="text-right">
+                        <div className="text-zinc-500 text-[9px] uppercase font-mono">Available_Resources</div>
+                        <div className="text-amber-400 text-2xl font-bold glow-text">◊ {save.shards}</div>
+                    </div>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-4 overflow-y-auto max-h-[55vh] pr-2 custom-scrollbar">
+                  {META_UPGRADES.map(meta => {
+                    const currentLvl = save.metaLevels[meta.id] || 0;
+                    const isMax = currentLvl >= meta.maxLevel;
+                    const cost = meta.cost * (currentLvl + 1);
+
+                    return (
+                      <div key={meta.id} className="bg-zinc-900/50 border border-zinc-800 p-4 rounded flex items-center justify-between group hover:border-amber-400/50 transition-colors">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <h3 className="text-white font-bold text-md uppercase">{meta.name}</h3>
+                            <div className="flex gap-1">
+                                {Array.from({length: meta.maxLevel}).map((_, i) => (
+                                    <div key={i} className={`w-1.5 h-3 ${i < currentLvl ? 'bg-amber-400' : 'bg-zinc-800'}`} />
+                                ))}
+                            </div>
+                          </div>
+                          <p className="text-zinc-500 text-[11px] italic mt-1">{meta.description}</p>
+                        </div>
+                        <button 
+                          disabled={isMax || save.shards < cost}
+                          onClick={() => {
+                            setSave(prev => ({
+                              ...prev,
+                              shards: prev.shards - cost,
+                              metaLevels: { ...prev.metaLevels, [meta.id]: currentLvl + 1 }
+                            }));
+                            SoundSystem.playUpgradeSelect();
+                          }}
+                          className={`ml-4 px-6 py-2 rounded text-xs font-bold transition-all ${isMax ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' : (save.shards >= cost ? 'bg-amber-500 text-black hover:scale-105 active:scale-95' : 'bg-red-900/20 text-red-500 border border-red-500/50 cursor-not-allowed')}`}
+                        >
+                          {isMax ? 'MAXED' : `MOUNT ◊${cost}`}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+            </div>
+            <Button className="mt-8" variant="danger" size="sm" onClick={() => setPhase('MENU')}>RETURN_TO_LOGIN</Button>
+          </div>
+        )}
+
+        {phase === 'ACHIEVEMENTS' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/95 z-30 p-10">
+            <h2 className="text-4xl font-bold text-cyan-400 mb-8 retro-font">SYSTEM_LOGS</h2>
+            <div className="grid grid-cols-2 gap-4 w-full overflow-y-auto max-h-[60vh] p-4 custom-scrollbar">
+              {ACHIEVEMENTS_LIST.map(a => {
+                const unlocked = save.unlockedAchievements.includes(a.id);
+                return (
+                  <div key={a.id} className={`p-4 border rounded flex items-center gap-4 transition-all ${unlocked ? 'border-cyan-500 bg-cyan-950/20' : 'border-zinc-800 bg-zinc-900/50 grayscale opacity-40'}`}>
+                    <div className="text-3xl">{unlocked ? a.icon : '🔒'}</div>
+                    <div>
+                      <div className="text-white font-bold text-[10px] uppercase retro-font tracking-tighter">{a.name}</div>
+                      <div className="text-zinc-400 text-[10px] leading-tight mt-1 font-mono uppercase">{a.description}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <Button className="mt-8" variant="danger" size="sm" onClick={() => setPhase('MENU')}>BACK_TO_SHELL</Button>
           </div>
         )}
 
         {phase === 'PLAYING' && (
           <GameCanvas 
-            context={{ level, player: playerStats, enemy: scaledEnemy }}
+            context={{ level, player: playerStats, enemy: currentEnemy }}
             currentEnemyHp={currentEnemyHp}
-            onPlayerScore={() => { handleEnemyDamage(1); triggerShake(5); }}
-            onEnemyScore={() => { handlePlayerDamage(1); SoundSystem.playScoreEnemy(); }}
+            onPlayerScore={() => handleEnemyDamage(1)}
+            onEnemyScore={handlePlayerDamage}
             onProjectileHit={() => handleEnemyDamage(1)}
-            onSecretBreach={() => {
-                setPhase('SURVIVOR_MINIGAME');
-                triggerShake(30);
-            }}
+            isPaused={isPaused}
           />
         )}
 
-        {phase === 'SURVIVOR_MINIGAME' && (
-          <SurvivorCanvas onComplete={() => {
-            setPlayerStats(p => ({ ...p, shield: p.maxShield + 5, hp: p.maxHp }));
-            setPhase('PLAYING');
-            triggerShake(10);
-          }} />
-        )}
-
         {phase === 'LEVEL_UP' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-40 p-12">
-            <h2 className="text-5xl font-bold text-emerald-400 mb-2 retro-font drop-shadow-lg">SECTOR_CLEARED</h2>
-            <p className="text-zinc-500 mb-10 font-mono tracking-widest uppercase text-xs">Choose Your Augmentation</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-30 p-12 backdrop-blur-xl animate-in slide-in-from-bottom duration-500">
+            <div className="text-center mb-8">
+                <h2 className="text-5xl font-bold text-emerald-400 mb-2 retro-font">SECTOR_CLEARED</h2>
+                <p className="text-zinc-500 font-mono tracking-[0.4em] uppercase text-xs">Selecting Augmentation Pattern...</p>
+                <div className="text-amber-400 font-mono text-[10px] mt-2">+ ◊{Math.floor(level * 5 * (1 + (save.metaLevels['meta_shards'] || 0) * 0.25))} Shards Gathered</div>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
               {availableUpgrades.map((upgrade) => (
                 <button 
-                  key={upgrade.id} 
-                  onClick={() => handleSelectUpgrade(upgrade)} 
-                  className={`group p-6 border-2 transition-all flex flex-col justify-between h-72 hover:scale-105 active:scale-95 ${upgrade.rarity === 'legendary' ? 'border-yellow-500 bg-yellow-950/20 shadow-[0_0_20px_rgba(234,179,8,0.2)]' : upgrade.rarity === 'rare' ? 'border-purple-500 bg-purple-950/20 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'border-cyan-500 bg-cyan-950/20'}`}
+                    key={upgrade.id} 
+                    onMouseEnter={() => SoundSystem.playUiHover()} 
+                    onClick={() => handleSelectUpgrade(upgrade)} 
+                    className={`group relative p-6 border-2 flex flex-col items-start text-left min-h-[20rem] justify-between transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl ${
+                        upgrade.rarity === 'legendary' ? 'border-amber-400 bg-amber-950/20 shadow-amber-900/40' : 
+                        upgrade.rarity === 'rare' ? 'border-purple-500 bg-purple-950/20 shadow-purple-900/40' : 
+                        'border-cyan-500 bg-cyan-950/20 shadow-cyan-900/40'
+                    }`}
                 >
-                  <div className="space-y-4">
-                    <span className={`text-[10px] uppercase font-bold tracking-widest ${upgrade.rarity === 'legendary' ? 'text-yellow-400' : upgrade.rarity === 'rare' ? 'text-purple-400' : 'text-cyan-400'}`}>{upgrade.rarity}</span>
-                    <h3 className="text-xl font-bold text-white retro-font group-hover:text-white transition-colors">{upgrade.name}</h3>
-                    <p className="text-zinc-400 text-xs font-mono leading-relaxed">{upgrade.description}</p>
+                  <div className="w-full">
+                    <div className={`text-[9px] font-bold uppercase tracking-widest px-2 py-1 mb-4 inline-block rounded-sm ${
+                        upgrade.rarity === 'legendary' ? 'bg-amber-400 text-black' : 
+                        upgrade.rarity === 'rare' ? 'bg-purple-500 text-white' : 
+                        'bg-cyan-500 text-black'
+                    }`}>{upgrade.rarity}</div>
+                    <h3 className="text-xl font-bold text-white mt-1 retro-font leading-tight">{upgrade.name}</h3>
+                    <p className="text-zinc-400 mt-4 text-xs font-mono leading-relaxed">{upgrade.description}</p>
                   </div>
-                  <div className="text-[10px] text-right text-zinc-600 font-mono group-hover:text-white transition-all uppercase">Mount_Drive >></div>
+                  <div className="text-[10px] text-right text-zinc-600 font-mono group-hover:text-white transition-all uppercase">Mount_Drive &gt;&gt;</div>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        {phase === 'FPS_HUNT' && (
-            <FPSCanvas player={playerStats} onVictory={() => setPhase('SPACE_SHOOTER')} onDamage={handlePlayerDamage} />
-        )}
-
-        {phase === 'SPACE_SHOOTER' && (
-            <SpaceShooterCanvas playerStats={playerStats} onVictory={() => setPhase('SIDE_SCROLLER')} onGameOver={() => setPhase('GAME_OVER')} onDamage={handlePlayerDamage} />
-        )}
-
-        {phase === 'SIDE_SCROLLER' && (
-            <SideScrollerCanvas playerStats={playerStats} onVictory={() => setPhase('MATRIX_BREACH')} onDamage={handlePlayerDamage} />
-        )}
-
-        {phase === 'MATRIX_BREACH' && (
-            <MatrixBreachCanvas onVictory={() => setPhase('CELEBRATION')} onDamage={handlePlayerDamage} />
+        {phase === 'GAME_OVER' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-950/95 z-40 space-y-8 animate-in zoom-in duration-300">
+            <h2 className="text-8xl text-red-500 font-bold retro-font glow-text text-center leading-none">CORE<br/>LOST</h2>
+            <div className="text-center font-mono text-red-200 bg-red-900/40 p-6 border border-red-500/50 rounded max-w-sm">
+                <p className="tracking-widest uppercase text-xl font-bold">SYSTEM_HALTED</p>
+                <p className="mt-2 text-red-400/80">TERMINATED AT SECTOR {level}</p>
+                <p className="mt-4 text-amber-400 font-bold tracking-widest">+ ◊{shardsEarnedThisRun} SHARDS RECOVERED</p>
+            </div>
+            <Button variant="danger" onClick={() => setPhase('MENU')} size="lg" className="px-20">HARD REBOOT</Button>
+          </div>
         )}
 
         {phase === 'VICTORY' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-cyan-950/90 z-40 p-10 space-y-8 animate-in fade-in zoom-in">
-            <h2 className="text-6xl text-yellow-400 font-bold retro-font text-center glow-text leading-tight">CORE_BYPASSED</h2>
-            <p className="text-cyan-200 font-mono text-xl max-w-lg text-center uppercase tracking-[0.2em] leading-relaxed">
-                Infiltration successful. Initializing Phase 2: Total Data Hunt.
-            </p>
-            <Button variant="secondary" onClick={() => setPhase('FPS_HUNT')} size="lg">Begin The Hunt</Button>
-          </div>
-        )}
-
-        {phase === 'CELEBRATION' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-950/95 z-50 p-10 space-y-10">
-            <h2 className="text-8xl text-emerald-400 font-bold retro-font text-center glow-text">ASCENSION</h2>
-            <div className="space-y-4 text-center">
-                <p className="text-emerald-200 font-mono text-xl uppercase tracking-[0.3em]">Protocol Complete.</p>
-                <p className="text-emerald-500/60 font-mono text-xs max-w-md mx-auto">All sectors localized. Simulation recalibrating for infinite loop...</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-cyan-950/95 z-40 space-y-10 animate-in fade-in duration-1000">
+            <div className="text-center">
+                <h2 className="text-6xl text-yellow-400 font-bold retro-font glow-text leading-none mb-2">OMEGA<br/>BYPASSED</h2>
+                <p className="text-cyan-400 font-mono text-[10px] tracking-[0.4em] uppercase">Digital God Deposed</p>
             </div>
-            <Button variant="primary" onClick={() => {
-              setPrestige(p => p + 1);
-              setPhase('MENU');
-            }}>Loop Frequency (Prestige {prestige + 1})</Button>
+            <div className="flex flex-col md:flex-row gap-4">
+                <Button variant="primary" onClick={() => {
+                    setPhase('FPS_HUNT');
+                    setIsPaused(false);
+                    SoundSystem.updateDrone(0, true);
+                }} size="lg">INFILTRATE GRID</Button>
+                <Button variant="secondary" onClick={() => { setPhase('SIDE_SCROLLER'); setIsPaused(false); }} size="lg">DATA UPLINK</Button>
+            </div>
+            <button onClick={() => setPhase('MENU')} className="text-zinc-500 uppercase font-mono text-xs hover:text-white transition-colors">Return to login</button>
           </div>
         )}
 
-        {phase === 'GAME_OVER' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-950/95 z-50 p-10 space-y-8 animate-in slide-in-from-top">
-            <h2 className="text-8xl text-red-600 font-bold retro-font text-center glow-text">FATAL_ERR</h2>
-            <p className="text-red-200 font-mono tracking-[0.5em] uppercase text-sm">System integrity: 0.00%</p>
-            <Button variant="danger" onClick={() => setPhase('MENU')} size="lg">Hard Reboot</Button>
-          </div>
+        {phase === 'FPS_HUNT' && (
+           <FPSCanvas player={playerStats} onVictory={() => setPhase('SIDE_SCROLLER')} onExit={() => setPhase('MENU')} isPaused={isPaused} />
         )}
 
-      </div>
-      
-      <div className="absolute bottom-6 right-6 font-mono text-[10px] text-zinc-800 select-none pointer-events-none tracking-[1em] opacity-40 uppercase">
-        Prestige_{prestige} // Sector_{level} // Rogue_Active
+        {phase === 'SIDE_SCROLLER' && (
+           <SideScrollerCanvas playerStats={playerStats} onVictory={() => setPhase('VICTORY')} onExit={() => setPhase('MENU')} isPaused={isPaused} />
+        )}
       </div>
     </div>
   );

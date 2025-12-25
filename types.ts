@@ -1,4 +1,5 @@
-export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY' | 'FPS_HUNT' | 'SPACE_SHOOTER' | 'SIDE_SCROLLER' | 'MATRIX_BREACH' | 'SURVIVOR_MINIGAME' | 'CELEBRATION';
+
+export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY' | 'FPS_HUNT' | 'SIDE_SCROLLER' | 'META_LAB' | 'ACHIEVEMENTS';
 
 export interface Vector {
   x: number;
@@ -20,7 +21,6 @@ export interface Particle {
   maxLife: number;
   color: string;
   size: number;
-  glow?: boolean;
 }
 
 export interface Projectile {
@@ -32,28 +32,23 @@ export interface Projectile {
   color: string;
   active: boolean;
   damage: number;
-  owner: 'player' | 'enemy';
 }
 
 export interface Ball extends Entity {
   vel: Vector;
   speed: number;
   active: boolean;
-  trail: Vector[];
 }
 
 export interface Paddle extends Entity {
   speed: number;
   targetY?: number;
   glitchTimer?: number;
-  style: 'AGGRESSIVE' | 'DEFENSIVE' | 'CALCULATING';
 }
 
 export interface PlayerStats {
   hp: number;
   maxHp: number;
-  stamina: number;
-  maxStamina: number;
   score: number;
   paddleHeight: number;
   paddleSpeed: number;
@@ -63,18 +58,12 @@ export interface PlayerStats {
   vampirism: number;
   shield: number; 
   maxShield: number; 
-  weaponLevel: number; 
+  magnetism: number; 
+  timeDilation: boolean; 
+  glitchChance: number; 
+  weaponLevel: number;
   shootCooldown: number;
   currentCooldown: number;
-  prestige: number;
-  hasArchitectKey: boolean;
-  chronoTrigger: boolean; // Manual time slow
-}
-
-export interface SaveData {
-  prestige: number;
-  level: number;
-  playerStats: PlayerStats;
 }
 
 export interface EnemyStats {
@@ -86,7 +75,6 @@ export interface EnemyStats {
   reactionDelay: number; 
   errorMargin: number; 
   color: string;
-  style: Paddle['style'];
 }
 
 export interface Upgrade {
@@ -97,6 +85,31 @@ export interface Upgrade {
   apply: (stats: PlayerStats) => PlayerStats;
 }
 
+export interface MetaUpgrade {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  maxLevel: number;
+  effect: (level: number) => Partial<PlayerStats>;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+}
+
+export interface SaveData {
+  shards: number;
+  totalShardsEarned: number;
+  metaLevels: Record<string, number>;
+  unlockedAchievements: string[];
+  highScore: number;
+  totalKills: number;
+}
+
 export interface GameContext {
   level: number;
   player: PlayerStats;
@@ -104,25 +117,17 @@ export interface GameContext {
 }
 
 export interface FPSEnemy {
-  id: number;
+  id: string;
   x: number;
   y: number;
   hp: number;
-  maxHp: number;
   color: string;
   dead: boolean;
-  lastShot: number;
-  state: 'IDLE' | 'HUNTING' | 'FIRING';
+  dist?: number;
 }
 
 export interface PlatformEnemy extends Entity {
   velX: number;
   hp: number;
-  dead: boolean;
-}
-
-export interface ShooterEnemy extends Entity {
-  hp: number;
-  lastShot: number;
   dead: boolean;
 }
