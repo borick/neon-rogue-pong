@@ -1,5 +1,7 @@
 {
-  "name": "Neon Rogue Pong",
-  "description": "A high-octane, roguelike evolution of Pong. Battle through waves of increasingly difficult AI opponents, collect cybernetic upgrades, and survive as long as possible in this neon-soaked arcade challenge.",
-  "requestFramePermissions": []
+  "name": "Neon Rogue Pong: Redux",
+  "description": "A high-octane neon roguelike paddle combat game with multi-genre minigames and progressive difficulty scaling.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }

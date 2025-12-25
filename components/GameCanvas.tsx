@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, useState } from 'react';
 import { GameContext, Paddle, Ball, Particle, Projectile } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PADDLE_WIDTH, BALL_SIZE, INITIAL_BALL_SPEED } from '../constants';
@@ -10,27 +11,25 @@ interface GameCanvasProps {
   onPlayerScore: () => void;
   onEnemyScore: () => void;
   onProjectileHit: () => void;
+  isPaused?: boolean;
 }
 
-interface BallPos {
-  x: number;
-  y: number;
-}
-
-const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlayerScore, onEnemyScore, onProjectileHit }) => {
+const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlayerScore, onEnemyScore, onProjectileHit, isPaused = false }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const requestRef = useRef<number>();
+  // Fixed: Added initial value 0 to satisfy useRef<number> requirement
+  const requestRef = useRef<number>(0);
+  const lastTimeRef = useRef<number>(0);
   
   const playerRef = useRef<Paddle>({
-    pos: { x: 50, y: CANVAS_HEIGHT / 2 - 40 },
+    pos: { x: 50, y: CANVAS_HEIGHT / 2 - context.player.paddleHeight / 2 },
     width: PADDLE_WIDTH,
     height: context.player.paddleHeight,
     color: '#22d3ee',
     speed: context.player.paddleSpeed,
   });
-
+  
   const enemyRef = useRef<Paddle>({
-    pos: { x: CANVAS_WIDTH - 50 - PADDLE_WIDTH, y: CANVAS_HEIGHT / 2 - 40 },
+    pos: { x: CANVAS_WIDTH - 50 - PADDLE_WIDTH, y: CANVAS_HEIGHT / 2 - context.enemy.paddleHeight / 2 },
     width: PADDLE_WIDTH,
     height: context.enemy.paddleHeight,
     color: context.enemy.color,
@@ -53,7 +52,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
   const particlesRef = useRef<Particle[]>([]);
   const screenShakeRef = useRef<number>(0);
   const hitStopRef = useRef<number>(0);
-  const ballTrailRef = useRef<BallPos[]>([]);
+  const ballTrailRef = useRef<{x: number, y: number}[]>([]);
   const keysPressed = useRef<{ [key: string]: boolean }>({});
   const mousePos = useRef<number | null>(null);
   const isMouseDown = useRef(false);
@@ -88,7 +87,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
     window.addEventListener('mouseup', handleMouseUp);
     canvas.addEventListener('mousemove', handleMouseMove);
 
-    const animate = () => {
+    const animate = (time: number) => {
+      const delta = time - lastTimeRef.current;
+      const targetFrameTime = 1000 / 60;
+
+      if (delta < targetFrameTime) {
+        requestRef.current = requestAnimationFrame(animate);
+        return;
+      }
+      
+      lastTimeRef.current = time - (delta % targetFrameTime);
+
+      if (isPaused) {
+        requestRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
       if (hitStopRef.current > 0) {
         hitStopRef.current--;
         requestRef.current = requestAnimationFrame(animate);
@@ -98,7 +112,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
       let inputY = 0;
       if (keysPressed.current['ArrowUp'] || keysPressed.current['w']) inputY = -1;
       if (keysPressed.current['ArrowDown'] || keysPressed.current['s']) inputY = 1;
-      
       const wantsToShoot = keysPressed.current[' '] || isMouseDown.current;
 
       const updateResult = updateGame(
@@ -111,13 +124,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
       ballRef.current = updateResult.ball;
       projectilesRef.current = updateResult.projectiles;
       particlesRef.current = [...updateParticles(particlesRef.current), ...updateResult.particles];
-
       context.player.currentCooldown = Math.max(0, context.player.currentCooldown - 1);
 
       SoundSystem.updateDrone(ballRef.current.speed);
 
       ballTrailRef.current.unshift({ x: ballRef.current.pos.x, y: ballRef.current.pos.y });
-      if (ballTrailRef.current.length > 8) ballTrailRef.current.pop();
+      if (ballTrailRef.current.length > 12) ballTrailRef.current.pop();
 
       if (updateResult.event !== 'none') {
         if (updateResult.event === 'shoot') {
@@ -126,13 +138,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
         } else if (updateResult.event === 'proj_hit') {
           SoundSystem.playProjectileHit();
           onProjectileHit();
-          screenShakeRef.current = 5;
+          screenShakeRef.current = 10;
         } else if (updateResult.event.startsWith('hit')) {
-          hitStopRef.current = 4;
-          screenShakeRef.current = 8;
+          hitStopRef.current = 3;
+          screenShakeRef.current = 6;
           updateResult.event === 'hit_player' ? SoundSystem.playPlayerHit() : SoundSystem.playEnemyHit();
         } else if (updateResult.event.startsWith('score')) {
-          hitStopRef.current = 10;
+          hitStopRef.current = 12;
           screenShakeRef.current = 15;
           updateResult.event === 'score_player' ? SoundSystem.playScorePlayer() : SoundSystem.playScoreEnemy();
           onPlayerScore(); 
@@ -146,21 +158,26 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
 
       if (screenShakeRef.current > 0) screenShakeRef.current *= 0.9;
 
-      ctx.fillStyle = '#050507'; 
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-      ctx.strokeStyle = '#10101a';
+      // Render
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      
+      // Cyber Grid Background
+      ctx.strokeStyle = '#ffffff08';
       ctx.lineWidth = 1;
-      const ballX = ballRef.current.pos.x;
-      const ballY = ballRef.current.pos.y;
+      const bX = ballRef.current.pos.x;
+      const bY = ballRef.current.pos.y;
       for (let i = 0; i < CANVAS_WIDTH; i += 40) {
         ctx.beginPath();
-        ctx.moveTo(i, 0); ctx.quadraticCurveTo(ballX, ballY, i, CANVAS_HEIGHT); ctx.stroke();
+        ctx.moveTo(i, 0); ctx.quadraticCurveTo(bX, bY, i, CANVAS_HEIGHT); ctx.stroke();
       }
 
-      if (context.player.timeDilation && ballRef.current.pos.x < CANVAS_WIDTH / 3) {
-        ctx.fillStyle = 'rgba(34, 211, 238, 0.05)';
-        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      // Time dilation field
+      if (context.player.timeDilation && ballRef.current.pos.x < CANVAS_WIDTH / 4) {
+        const grad = ctx.createLinearGradient(0, 0, CANVAS_WIDTH / 4, 0);
+        grad.addColorStop(0, 'rgba(6, 182, 212, 0.1)');
+        grad.addColorStop(1, 'rgba(6, 182, 212, 0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, CANVAS_WIDTH / 4, CANVAS_HEIGHT);
       }
 
       ctx.save();
@@ -168,19 +185,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
         ctx.translate((Math.random() - 0.5) * screenShakeRef.current, (Math.random() - 0.5) * screenShakeRef.current);
       }
 
+      // Ball Trail
       ballTrailRef.current.forEach((pos, i) => {
-        const alpha = (1 - i / ballTrailRef.current.length) * 0.5;
+        const alpha = (1 - i / ballTrailRef.current.length) * 0.4;
         ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.fillRect(pos.x, pos.y, BALL_SIZE, BALL_SIZE);
       });
 
+      // Entities
       const drawEntity = (e: Paddle | Ball | Projectile, isEnemy: boolean = false) => {
         const isGlitch = isEnemy && (enemyRef.current.glitchTimer || 0) > 0;
-        ctx.fillStyle = isGlitch ? '#fff' : e.color;
+        ctx.fillStyle = isGlitch ? '#ff0000' : e.color;
         ctx.shadowBlur = isGlitch ? 40 : 15;
         ctx.shadowColor = e.color;
-        if (isGlitch && Math.random() > 0.5) {
-           ctx.fillRect(e.pos.x + (Math.random()-0.5)*15, e.pos.y, e.width, e.height);
+        
+        if (isGlitch && Math.random() > 0.4) {
+           ctx.fillRect(e.pos.x + (Math.random()-0.5)*20, e.pos.y, e.width, e.height);
         } else {
            ctx.fillRect(e.pos.x, e.pos.y, e.width, e.height);
         }
@@ -192,6 +212,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
       drawEntity(enemyRef.current, true);
       drawEntity(ballRef.current);
 
+      // Particles
       particlesRef.current.forEach(p => {
         ctx.fillStyle = p.color;
         ctx.globalAlpha = p.life;
@@ -206,6 +227,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
     };
 
     requestRef.current = requestAnimationFrame(animate);
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
@@ -213,45 +235,58 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
       window.removeEventListener('mouseup', handleMouseUp);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [context]);
+  }, [context, onEnemyScore, onPlayerScore, onProjectileHit, isPaused]);
 
   return (
     <div className="relative w-full h-full cursor-none">
-       <div className="absolute top-4 left-0 right-0 flex justify-between px-12 pointer-events-none z-10 font-mono text-2xl font-bold">
-          <div className="flex flex-col items-center">
-             <div className="text-cyan-400 text-sm opacity-50 uppercase">User_Stats</div>
-             <div className="flex gap-1 mt-1">
-               {Array.from({length: context.player.hp}).map((_, i) => (
-                  <div key={i} className="w-4 h-6 bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.8)] border border-white/20" />
+       <div className="absolute top-6 left-0 right-0 flex justify-between px-16 pointer-events-none z-10 font-mono">
+          
+          <div className="flex flex-col items-start gap-1">
+             <div className="text-cyan-400 text-[10px] opacity-70 uppercase tracking-widest font-bold">SYSTEM_INTEGRITY</div>
+             <div className="flex gap-1.5 items-end">
+               {Array.from({length: context.player.maxHp}).map((_, i) => (
+                  <div key={i} className={`w-4 h-8 border border-cyan-500/50 ${i < context.player.hp ? 'bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.8)]' : 'bg-transparent opacity-20'}`} />
                ))}
-               {Array.from({length: context.player.shield}).map((_, i) => (
-                  <div key={'s'+i} className="w-5 h-7 bg-indigo-400 shadow-[0_0_15px_rgba(129,140,248,0.9)] border-2 border-white/50 animate-pulse" />
+               {Array.from({length: context.player.maxShield}).map((_, i) => (
+                  <div key={'s'+i} className={`w-5 h-10 border-2 border-indigo-400/50 ${i < context.player.shield ? 'bg-indigo-400 shadow-[0_0_20px_rgba(129,140,248,1)] animate-pulse' : 'bg-transparent opacity-20'}`} />
                ))}
              </div>
           </div>
+
           <div className="flex flex-col items-center">
-            <div className="text-zinc-600 text-[10px] tracking-[0.5em] uppercase">Weapon_Status</div>
-            <div className={`text-xs mt-1 font-mono ${context.player.weaponLevel > 0 ? 'text-amber-400' : 'text-zinc-700'}`}>
-              {context.player.weaponLevel === 0 && 'OFFLINE'}
-              {context.player.weaponLevel === 1 && 'PULSE_BLASTER'}
-              {context.player.weaponLevel === 2 && 'TWIN_RAILGUNS'}
-              {context.player.weaponLevel === 3 && 'OMEGA_BEAM'}
+            <div className="text-zinc-500 text-[9px] tracking-[0.6em] uppercase font-bold">Sector_{context.level}</div>
+            <div className={`text-xs mt-1 font-mono font-bold tracking-widest ${context.player.weaponLevel > 0 ? 'text-amber-400' : 'text-zinc-700'}`}>
+              {context.player.weaponLevel === 0 && 'WEAPONS_LOCKED'}
+              {context.player.weaponLevel === 1 && 'PULSE_BLASTER_ONLINE'}
+              {context.player.weaponLevel === 2 && 'TWIN_RAILGUNS_READY'}
+              {context.player.weaponLevel === 3 && 'SINGULARITY_BEAM_ACTIVE'}
             </div>
+            {context.player.weaponLevel > 0 && (
+                <div className="w-48 h-1 bg-zinc-800 mt-2 rounded-full overflow-hidden">
+                    <div 
+                        className="h-full bg-cyan-400 transition-all duration-100" 
+                        style={{ width: `${100 - (context.player.currentCooldown / context.player.shootCooldown) * 100}%` }} 
+                    />
+                </div>
+            )}
           </div>
-          <div className="flex flex-col items-center">
-             <div style={{color: context.enemy.color}} className="text-sm opacity-50 uppercase">{context.enemy.name}</div>
-             <div className="flex gap-1 mt-1">
+
+          <div className="flex flex-col items-end gap-1">
+             <div style={{color: context.enemy.color}} className="text-[10px] opacity-70 uppercase tracking-widest font-bold">{context.enemy.name}</div>
+             <div className="flex gap-1.5">
                {Array.from({length: Math.max(0, currentEnemyHp)}).map((_, i) => (
-                  <div key={i} className="w-4 h-6 shadow-[0_0_10px_currentColor]" style={{ backgroundColor: context.enemy.color }} />
+                  <div key={i} className="w-4 h-8 shadow-[0_0_15px_currentColor]" style={{ backgroundColor: context.enemy.color }} />
                ))}
              </div>
           </div>
        </div>
-       <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none opacity-20 font-mono text-[10px] tracking-widest text-zinc-500">
-         [ HOLD SPACEBAR OR TAP TO FIRE WEAPONS ]
+
+       <div className="absolute bottom-6 left-0 right-0 text-center pointer-events-none opacity-40 font-mono text-[9px] tracking-[0.8em] text-zinc-500 animate-pulse">
+         [ HOLD SPACEBAR OR MOUSE_ONE TO TRIGGER AUGMENTS ]
        </div>
       <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full object-contain" />
     </div>
   );
 };
+
 export default GameCanvas;

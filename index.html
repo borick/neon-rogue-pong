@@ -1,33 +1,33 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-    <title>Neon Rogue Pong</title>
+    <title>Neon Rogue Pong: Redux</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@300;400;500;600;700&display=swap');
       
       body {
-        background-color: #050505;
-        color: #e0e0e0;
+        background-color: #020617;
+        color: #f8fafc;
         font-family: 'Rajdhani', sans-serif;
-        overflow: hidden; /* Prevent scroll on mobile */
+        overflow: hidden; 
         touch-action: none;
       }
-      
+
       .retro-font {
         font-family: 'Press Start 2P', cursive;
       }
 
-      /* CRT Scanline Effect */
       .scanlines {
         background: linear-gradient(
           to bottom,
-          rgba(255,255,255,0),
-          rgba(255,255,255,0) 50%,
-          rgba(0,0,0,0.1) 50%,
-          rgba(0,0,0,0.1)
+          rgba(255, 255, 255, 0),
+          rgba(255, 255, 255, 0) 50%,
+          rgba(0, 0, 0, 0.2) 50%,
+          rgba(0, 0, 0, 0.2)
         );
         background-size: 100% 4px;
         position: absolute;
@@ -35,9 +35,22 @@
         pointer-events: none;
         z-index: 50;
       }
-      
+
       .glow-text {
         text-shadow: 0 0 10px currentColor;
+      }
+
+      @keyframes glitch {
+        0% { transform: translate(0); }
+        20% { transform: translate(-2px, 2px); }
+        40% { transform: translate(-2px, -2px); }
+        60% { transform: translate(2px, 2px); }
+        80% { transform: translate(2px, -2px); }
+        100% { transform: translate(0); }
+      }
+
+      .glitch-active {
+        animation: glitch 0.2s infinite;
       }
     </style>
   <script type="importmap">
@@ -53,6 +66,6 @@
 </head>
   <body>
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>

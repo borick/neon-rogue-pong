@@ -1,3 +1,4 @@
+
 export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY' | 'FPS_HUNT' | 'SIDE_SCROLLER';
 
 export interface Vector {
@@ -41,8 +42,8 @@ export interface Ball extends Entity {
 
 export interface Paddle extends Entity {
   speed: number;
-  targetY?: number; // For AI
-  glitchTimer?: number; // Frames frozen
+  targetY?: number;
+  glitchTimer?: number;
 }
 
 export interface PlayerStats {
@@ -60,7 +61,7 @@ export interface PlayerStats {
   magnetism: number; 
   timeDilation: boolean; 
   glitchChance: number; 
-  weaponLevel: number; // 0: None, 1: Basic, 2: Twin, 3: Omega
+  weaponLevel: number;
   shootCooldown: number;
   currentCooldown: number;
 }
@@ -90,13 +91,14 @@ export interface GameContext {
   enemy: EnemyStats;
 }
 
-// FPS & Side-Scroller Specific
 export interface FPSEnemy {
+  id: string;
   x: number;
   y: number;
   hp: number;
   color: string;
   dead: boolean;
+  dist?: number;
 }
 
 export interface PlatformEnemy extends Entity {
