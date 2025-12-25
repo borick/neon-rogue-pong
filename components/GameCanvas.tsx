@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import { GameContext, Paddle, Ball, Particle, Projectile } from '../types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, PADDLE_WIDTH, BALL_SIZE, INITIAL_BALL_SPEED } from '../constants';
@@ -16,7 +15,6 @@ interface GameCanvasProps {
 
 const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlayerScore, onEnemyScore, onProjectileHit, isPaused = false }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Fixed: Added initial value 0 to satisfy useRef<number> requirement
   const requestRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   
@@ -158,10 +156,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
 
       if (screenShakeRef.current > 0) screenShakeRef.current *= 0.9;
 
-      // Render
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      
-      // Cyber Grid Background
       ctx.strokeStyle = '#ffffff08';
       ctx.lineWidth = 1;
       const bX = ballRef.current.pos.x;
@@ -171,7 +166,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
         ctx.moveTo(i, 0); ctx.quadraticCurveTo(bX, bY, i, CANVAS_HEIGHT); ctx.stroke();
       }
 
-      // Time dilation field
       if (context.player.timeDilation && ballRef.current.pos.x < CANVAS_WIDTH / 4) {
         const grad = ctx.createLinearGradient(0, 0, CANVAS_WIDTH / 4, 0);
         grad.addColorStop(0, 'rgba(6, 182, 212, 0.1)');
@@ -185,14 +179,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
         ctx.translate((Math.random() - 0.5) * screenShakeRef.current, (Math.random() - 0.5) * screenShakeRef.current);
       }
 
-      // Ball Trail
       ballTrailRef.current.forEach((pos, i) => {
         const alpha = (1 - i / ballTrailRef.current.length) * 0.4;
         ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.fillRect(pos.x, pos.y, BALL_SIZE, BALL_SIZE);
       });
 
-      // Entities
       const drawEntity = (e: Paddle | Ball | Projectile, isEnemy: boolean = false) => {
         const isGlitch = isEnemy && (enemyRef.current.glitchTimer || 0) > 0;
         ctx.fillStyle = isGlitch ? '#ff0000' : e.color;
@@ -212,7 +204,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
       drawEntity(enemyRef.current, true);
       drawEntity(ballRef.current);
 
-      // Particles
       particlesRef.current.forEach(p => {
         ctx.fillStyle = p.color;
         ctx.globalAlpha = p.life;
@@ -240,7 +231,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ context, currentEnemyHp, onPlay
   return (
     <div className="relative w-full h-full cursor-none">
        <div className="absolute top-6 left-0 right-0 flex justify-between px-16 pointer-events-none z-10 font-mono">
-          
           <div className="flex flex-col items-start gap-1">
              <div className="text-cyan-400 text-[10px] opacity-70 uppercase tracking-widest font-bold">SYSTEM_INTEGRITY</div>
              <div className="flex gap-1.5 items-end">

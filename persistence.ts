@@ -1,4 +1,3 @@
-
 import { SaveData } from './types';
 
 const SAVE_KEY = 'neon_rogue_v1';
@@ -17,7 +16,9 @@ export const Persistence = {
     try {
       const data = localStorage.getItem(SAVE_KEY);
       if (!data) return DEFAULT_SAVE;
-      return { ...DEFAULT_SAVE, ...JSON.parse(data) };
+      const parsed = JSON.parse(data);
+      // Merge with default to ensure any new fields are present
+      return { ...DEFAULT_SAVE, ...parsed };
     } catch (e) {
       console.error('Failed to load save', e);
       return DEFAULT_SAVE;

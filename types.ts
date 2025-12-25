@@ -1,4 +1,3 @@
-
 export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY' | 'FPS_HUNT' | 'SIDE_SCROLLER' | 'META_LAB' | 'ACHIEVEMENTS';
 
 export interface Vector {
