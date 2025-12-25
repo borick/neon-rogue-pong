@@ -7,7 +7,7 @@ export const PADDLE_WIDTH = 15;
 export const BALL_SIZE = 12;
 
 export const INITIAL_BALL_SPEED = 4.0; 
-export const MAX_BALL_SPEED = 28;      
+export const MAX_BALL_SPEED = 32;      
 
 export const INITIAL_PLAYER_STATS: PlayerStats = {
   hp: 3,
@@ -88,48 +88,48 @@ export const ENEMIES: EnemyStats[] = [
         name: "Gateway Guardian",
         hp: 1, 
         maxHp: 1,
-        paddleHeight: 180, 
-        paddleSpeed: 1.5,  
-        reactionDelay: 100, 
-        errorMargin: 150,  
+        paddleHeight: 220, 
+        paddleSpeed: 1.0,  
+        reactionDelay: 150, 
+        errorMargin: 200,  
         color: '#22d3ee'
     },
     {
         name: "Sentry Unit 02",
         hp: 3,
         maxHp: 3,
-        paddleHeight: 120,
-        paddleSpeed: 5.0,
-        reactionDelay: 40,
-        errorMargin: 60,
+        paddleHeight: 130,
+        paddleSpeed: 6.0,
+        reactionDelay: 50,
+        errorMargin: 80,
         color: '#4ade80'
     },
     {
         name: "Neural Interceptor",
-        hp: 8,
-        maxHp: 8,
+        hp: 10,
+        maxHp: 10,
         paddleHeight: 100,
-        paddleSpeed: 10.0,
+        paddleSpeed: 12.0,
         reactionDelay: 15,
         errorMargin: 30,
         color: '#f472b6'
     },
     {
         name: "Void Colossus",
-        hp: 20,
-        maxHp: 20,
-        paddleHeight: 300, 
-        paddleSpeed: 15.0, 
+        hp: 25,
+        maxHp: 25,
+        paddleHeight: 320, 
+        paddleSpeed: 18.0, 
         reactionDelay: 5,
-        errorMargin: 10,
+        errorMargin: 5,
         color: '#818cf8'
     },
     {
         name: "OMEGA ARCHITECT",
-        hp: 50, 
-        maxHp: 50,
-        paddleHeight: 70, 
-        paddleSpeed: 22.0,  
+        hp: 80, 
+        maxHp: 80,
+        paddleHeight: 60, 
+        paddleSpeed: 28.0,  
         reactionDelay: 0, 
         errorMargin: 0,   
         color: '#facc15'
