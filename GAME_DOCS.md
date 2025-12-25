@@ -34,11 +34,12 @@ Neon Rogue: Redux is a multi-genre roguelike hybrid. It blends traditional Pong 
 -   **Objective**: Reach the X-coordinate of the Uplink Node to trigger victory.
 
 ## 5. Difficulty Scaling
--   **Sentinel 1**: High error margin (60px), slow speed.
--   **Omega Architect**: Minimal reaction delay (1 frame), extreme speed.
--   **Ball Max Speed**: Capped at 22 units to maintain playability.
+-   **Sentinel 1**: High error margin (80px), slow speed.
+-   **Omega Architect**: Frame-perfect reaction (0ms), extreme speed (16 units).
+-   **Ball Max Speed**: Capped at 24 units to maintain playability.
 
-## 6. Development Guidelines
--   **Style**: Tailwind CSS for UI, Canvas API for gameplay.
--   **Scaling**: All canvases should use `object-contain` to maintain aspect ratio across different resolutions.
--   **State**: Global state is managed in `App.tsx` and passed down. Avoid deep prop drilling where possible.
+## 6. Deployment to GitHub Pages
+To ensure the game runs correctly on GitHub Pages or other subfolder-based hosting:
+1.  **Relative Paths**: The `<script>` tag in `index.html` must use `./index.tsx` instead of `/index.tsx`.
+2.  **ESM Mapping**: Ensure the `importmap` in `index.html` is present to resolve React dependencies from ESM.sh.
+3.  **No-Build**: This app is designed to run without a build step (using `esm.sh` and browser-native TS/JSX support). Just copy the files to the root of your repository.

@@ -1,5 +1,5 @@
 
-export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY' | 'FPS_HUNT' | 'SIDE_SCROLLER';
+export type GameStatePhase = 'MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_UP' | 'GAME_OVER' | 'VICTORY' | 'FPS_HUNT' | 'SIDE_SCROLLER' | 'META_LAB' | 'ACHIEVEMENTS';
 
 export interface Vector {
   x: number;
@@ -83,6 +83,31 @@ export interface Upgrade {
   description: string;
   rarity: 'common' | 'rare' | 'legendary';
   apply: (stats: PlayerStats) => PlayerStats;
+}
+
+export interface MetaUpgrade {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  maxLevel: number;
+  effect: (level: number) => Partial<PlayerStats>;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+}
+
+export interface SaveData {
+  shards: number;
+  totalShardsEarned: number;
+  metaLevels: Record<string, number>;
+  unlockedAchievements: string[];
+  highScore: number;
+  totalKills: number;
 }
 
 export interface GameContext {

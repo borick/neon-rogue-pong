@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect } from 'react';
 import { PlayerStats, FPSEnemy } from '../types';
 import { SoundSystem } from '../audio';
@@ -12,7 +11,6 @@ interface FPSCanvasProps {
   isPaused?: boolean;
 }
 
-// Linear corridor map for better UX
 const MAP = [
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   [1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
@@ -26,7 +24,6 @@ const MAP = [
 
 const FPSCanvas: React.FC<FPSCanvasProps> = ({ player, onVictory, onExit, isPaused = false }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // Fixed: Added initial value 0 to satisfy useRef<number> requirement
   const requestRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   
@@ -110,7 +107,6 @@ const FPSCanvas: React.FC<FPSCanvasProps> = ({ player, onVictory, onExit, isPaus
         s.plane.y = oldPlaneX * Math.sin(-rotSpeed) + s.plane.y * Math.cos(-rotSpeed);
       }
 
-      // Shooting logic
       if ((s.keys[' '] || s.keys['f']) && s.weaponCooldown <= 0) {
         SoundSystem.playShoot(player.weaponLevel);
         s.weaponCooldown = 20;
@@ -141,7 +137,6 @@ const FPSCanvas: React.FC<FPSCanvasProps> = ({ player, onVictory, onExit, isPaus
           return;
       }
 
-      // Render Floor/Ceiling
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT / 2);
       ctx.fillStyle = '#020617';
@@ -197,7 +192,6 @@ const FPSCanvas: React.FC<FPSCanvasProps> = ({ player, onVictory, onExit, isPaus
         ctx.stroke();
       }
 
-      // Waypoint Guidance System
       const activeEnemy = s.enemies.find(e => !e.dead);
       if (activeEnemy) {
         const dx = activeEnemy.x - s.pos.x;
@@ -225,7 +219,6 @@ const FPSCanvas: React.FC<FPSCanvasProps> = ({ player, onVictory, onExit, isPaus
         ctx.fillText('FOLLOW_WAYPOINT', CANVAS_WIDTH / 2, 50);
       }
 
-      // Render Enemies
       const sortedEnemies = s.enemies
         .map(e => ({ ...e, dist: Math.pow(s.pos.x - e.x, 2) + Math.pow(s.pos.y - e.y, 2) }))
         .sort((a, b) => b.dist - a.dist);
@@ -250,7 +243,6 @@ const FPSCanvas: React.FC<FPSCanvasProps> = ({ player, onVictory, onExit, isPaus
         }
       });
 
-      // Weapon and HUD
       ctx.save();
       ctx.translate(CANVAS_WIDTH/2, CANVAS_HEIGHT - 120 + s.shake);
       ctx.fillStyle = '#1e293b';

@@ -121,6 +121,12 @@ export const SoundSystem = {
     playTone(440, 'triangle', 0.6, 0.15);
     setTimeout(() => playTone(880, 'triangle', 0.6, 0.15), 150);
   },
+  playAchievement: () => {
+    playTone(523.25, 'sine', 0.1, 0.2);
+    setTimeout(() => playTone(659.25, 'sine', 0.1, 0.2), 100);
+    setTimeout(() => playTone(783.99, 'sine', 0.1, 0.2), 200);
+    setTimeout(() => playTone(1046.50, 'sine', 0.4, 0.2), 300);
+  },
   playGameOver: () => playTone(150, 'sawtooth', 2.0, 0.3),
   playUiHover: () => playTone(1500, 'sine', 0.02, 0.03),
   playUiClick: () => playTone(1200, 'square', 0.06, 0.06),

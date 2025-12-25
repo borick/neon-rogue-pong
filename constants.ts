@@ -1,23 +1,21 @@
 
-import { EnemyStats, Upgrade, PlayerStats } from './types';
+import { EnemyStats, Upgrade, PlayerStats, MetaUpgrade, Achievement } from './types';
 
 export const CANVAS_WIDTH = 800;
 export const CANVAS_HEIGHT = 600;
 export const PADDLE_WIDTH = 15;
 export const BALL_SIZE = 12;
 
-// EASIER START: Reduced initial speed
-export const INITIAL_BALL_SPEED = 5.0; 
-// HARDER LATE GAME: Increased max speed cap
-export const MAX_BALL_SPEED = 22;
+export const INITIAL_BALL_SPEED = 4.0; 
+export const MAX_BALL_SPEED = 26;      
 
 export const INITIAL_PLAYER_STATS: PlayerStats = {
   hp: 3,
   maxHp: 3,
   score: 0,
-  paddleHeight: 100, // Slightly larger starting paddle for ease
-  paddleSpeed: 8,  
-  ballPower: 1.05,
+  paddleHeight: 120, 
+  paddleSpeed: 10,   
+  ballPower: 1.03,   
   ballSpeedMult: 1.0,
   enemySpeedMult: 1.0,
   vampirism: 0,
@@ -31,55 +29,90 @@ export const INITIAL_PLAYER_STATS: PlayerStats = {
   currentCooldown: 0,
 };
 
+export const META_UPGRADES: MetaUpgrade[] = [
+  {
+    id: 'meta_hp',
+    name: 'Reinforced Chassis',
+    description: '+1 Starting Max HP per rank.',
+    cost: 15,
+    maxLevel: 5,
+    effect: (lvl) => ({ maxHp: INITIAL_PLAYER_STATS.maxHp + lvl, hp: INITIAL_PLAYER_STATS.maxHp + lvl })
+  },
+  {
+    id: 'meta_speed',
+    name: 'Overclocked Servos',
+    description: '+5% Starting Paddle Speed per rank.',
+    cost: 10,
+    maxLevel: 10,
+    effect: (lvl) => ({ paddleSpeed: INITIAL_PLAYER_STATS.paddleSpeed * (1 + (lvl * 0.05)) })
+  },
+  {
+    id: 'meta_shield',
+    name: 'Starter Capacitor',
+    description: 'Start every run with +1 Max Shield per rank.',
+    cost: 25,
+    maxLevel: 3,
+    effect: (lvl) => ({ maxShield: lvl, shield: lvl })
+  }
+];
+
+export const ACHIEVEMENTS_LIST: Achievement[] = [
+  { id: 'first_blood', name: 'First Breach', description: 'Defeat the Gateway Guardian.', icon: '⚡' },
+  { id: 'flawless', name: 'Ghost in the Shell', description: 'Complete a sector without taking hull damage.', icon: '👻' },
+  { id: 'weapon_master', name: 'Singularity', description: 'Reach Weapon Level 3.', icon: '🌌' },
+  { id: 'architect_down', name: 'Architect Demise', description: 'Defeat the OMEGA ARCHITECT.', icon: '🏆' },
+  { id: 'rich', name: 'Data Miner', description: 'Earn 100 Neural Shards in a single session.', icon: '💎' }
+];
+
 export const ENEMIES: EnemyStats[] = [
     {
         name: "Gateway Guardian",
         hp: 1, 
         maxHp: 1,
-        paddleHeight: 120, // Easier to hit
-        paddleSpeed: 3.0,  // Slower
-        reactionDelay: 35, // High delay
-        errorMargin: 60,   // High error
+        paddleHeight: 160, 
+        paddleSpeed: 2.0,  
+        reactionDelay: 60, 
+        errorMargin: 100,  
         color: '#22d3ee'
     },
     {
         name: "Sentry Unit 02",
         hp: 3,
         maxHp: 3,
-        paddleHeight: 90,
-        paddleSpeed: 4.8,
-        reactionDelay: 15,
-        errorMargin: 30,
+        paddleHeight: 110,
+        paddleSpeed: 4.0,
+        reactionDelay: 30,
+        errorMargin: 40,
         color: '#4ade80'
     },
     {
         name: "Neural Interceptor",
-        hp: 5,
-        maxHp: 5,
-        paddleHeight: 75,
-        paddleSpeed: 8.5,
-        reactionDelay: 8,
-        errorMargin: 15,
+        hp: 6,
+        maxHp: 6,
+        paddleHeight: 90,
+        paddleSpeed: 9.0,
+        reactionDelay: 12,
+        errorMargin: 20,
         color: '#f472b6'
     },
     {
         name: "Void Colossus",
-        hp: 10,
-        maxHp: 10,
-        paddleHeight: 220,
-        paddleSpeed: 4.0,
+        hp: 15,
+        maxHp: 15,
+        paddleHeight: 280, 
+        paddleSpeed: 5.5,
         reactionDelay: 5,
-        errorMargin: 8,
+        errorMargin: 5,
         color: '#818cf8'
     },
     {
         name: "OMEGA ARCHITECT",
-        hp: 25, // Harder boss
-        maxHp: 25,
-        paddleHeight: 160,
-        paddleSpeed: 12,
-        reactionDelay: 1,
-        errorMargin: 2,
+        hp: 40, 
+        maxHp: 40,
+        paddleHeight: 80, 
+        paddleSpeed: 18,  
+        reactionDelay: 0, 
+        errorMargin: 0,   
         color: '#facc15'
     }
 ];
@@ -88,64 +121,64 @@ export const UPGRADES: Upgrade[] = [
     {
         id: 'weapon_1',
         name: 'Pulse Blaster',
-        description: 'Install frontal energy cannon. Fires on contact or manually.',
+        description: 'Install frontal energy cannon. Fires manually with Space/Mouse.',
         rarity: 'rare',
         apply: (s) => ({ ...s, weaponLevel: Math.max(s.weaponLevel, 1) }),
     },
     {
         id: 'weapon_2',
         name: 'Twin Railguns',
-        description: 'Upgrade to dual high-velocity railguns. Massive kinetic energy.',
+        description: 'Upgrade to dual high-velocity railguns. Doubled fire rate.',
         rarity: 'rare',
-        apply: (s) => ({ ...s, weaponLevel: Math.max(s.weaponLevel, 2), shootCooldown: 25 }),
+        apply: (s) => ({ ...s, weaponLevel: Math.max(s.weaponLevel, 2), shootCooldown: 20 }),
     },
     {
         id: 'weapon_3',
         name: 'Singularity Beam',
-        description: 'EXPERIMENTAL: High-intensity laser that shreds through digital defenses.',
+        description: 'EXPERIMENTAL: Ultra-high frequency laser that bypasses armor.',
         rarity: 'legendary',
-        apply: (s) => ({ ...s, weaponLevel: 3, shootCooldown: 20 }),
+        apply: (s) => ({ ...s, weaponLevel: 3, shootCooldown: 15 }),
     },
     {
         id: 'fire_rate',
-        name: 'Overclocked Buffer',
-        description: 'Reduces weapon cooldown by 40%.',
+        name: 'Neural Accelerator',
+        description: 'Reduces weapon reload time by 50%.',
         rarity: 'common',
-        apply: (s) => ({ ...s, shootCooldown: Math.max(8, s.shootCooldown * 0.6) }),
+        apply: (s) => ({ ...s, shootCooldown: Math.max(6, s.shootCooldown * 0.5) }),
     },
     {
         id: 'shield_up',
-        name: 'Fortify.exe',
-        description: 'Gain +1 Max Shield. Shields refresh every level.',
+        name: 'Fortify Protocol',
+        description: 'Gain +1 Max Shield. Shield integrity restored every level.',
         rarity: 'rare',
         apply: (s) => ({ ...s, maxShield: s.maxShield + 1, shield: s.shield + 1 }),
     },
     {
         id: 'magnet_up',
-        name: 'Flux Magnet',
-        description: 'The ball is drawn toward your paddle through electromagnetic fields.',
+        name: 'Graviton Pulse',
+        description: 'The ball is strongly drawn toward your paddle surface.',
         rarity: 'rare',
-        apply: (s) => ({ ...s, magnetism: s.magnetism + 0.2 }),
+        apply: (s) => ({ ...s, magnetism: s.magnetism + 0.35 }),
     },
     {
         id: 'time_up',
-        name: 'Slow-Mo Matrix',
-        description: 'Slows time significantly when the ball enters your red zone.',
+        name: 'Chrono-Trigger',
+        description: 'Slows time by 60% when the ball enters your red zone.',
         rarity: 'legendary',
         apply: (s) => ({ ...s, timeDilation: true }),
     },
     {
         id: 'health_pack',
-        name: 'System Restore',
-        description: '+1 Max HP and full system repair.',
+        name: 'Core Repair',
+        description: '+1 Max HP and total system health recovery.',
         rarity: 'common',
         apply: (s) => ({ ...s, maxHp: s.maxHp + 1, hp: s.maxHp + 1 }),
     },
     {
         id: 'speed_up_minor',
-        name: 'Turbo Boost',
-        description: 'Increase paddle movement speed by 30%.',
+        name: 'Overclocked Servos',
+        description: 'Increase paddle movement speed by 40%.',
         rarity: 'common',
-        apply: (s) => ({ ...s, paddleSpeed: s.paddleSpeed * 1.3 }),
+        apply: (s) => ({ ...s, paddleSpeed: s.paddleSpeed * 1.4 }),
     }
 ];
